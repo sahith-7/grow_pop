@@ -1,0 +1,5 @@
+# Shell scripts run inside Linux containers and on the server: they must keep LF line endings, even on Windows.
+* text=auto
+*.sh text eol=lf
+ops/* text eol=lf
+docker/** text eol=lf

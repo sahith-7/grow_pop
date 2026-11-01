@@ -1,0 +1,48 @@
+<!-- title: Pricing; description: Two plans for retail stores, a free trial, and payment by UPI. Read-only after 7 days overdue; your data export is always available. -->
+<h1>Pricing</h1>
+<p class="lead">Every store starts with a {{trialDays}}-day free trial with everything switched on. No card needed.</p>
+
+<div class="plans">
+  <section class="plan" aria-labelledby="plan-store">
+    <h2 id="plan-store">{{plans.store.name}}</h2>
+    <p class="price">{{plans.store.priceMonthText}} <small>a month</small></p>
+    <p class="muted">or {{plans.store.priceYearText}} a year (save {{plans.store.yearSavingText}})</p>
+    <ul>
+      <li>Counter billing with GST invoices, returns and credit notes</li>
+      <li>Products, barcodes, labels and spreadsheet import</li>
+      <li>Stock, locations, stocktakes and purchasing</li>
+      <li>Reports with CSV download</li>
+      <li>Up to {{plans.store.users}} people</li>
+    </ul>
+  </section>
+  <section class="plan featured" aria-labelledby="plan-online">
+    <h2 id="plan-online">{{plans.online.name}}</h2>
+    <p class="price">{{plans.online.priceMonthText}} <small>a month</small></p>
+    <p class="muted">or {{plans.online.priceYearText}} a year (save {{plans.online.yearSavingText}})</p>
+    <ul>
+      <li>Everything in {{plans.store.name}}</li>
+      <li>WooCommerce shop sync: products, prices, stock and photos</li>
+      <li>Web orders with stock held on payment</li>
+      <li>Pick, pack and dispatch with tracking emails</li>
+      <li>Up to {{plans.online.users}} people</li>
+    </ul>
+  </section>
+</div>
+<p class="notice">{{gstNote}}</p>
+
+<h2>How paying works</h2>
+<ol class="prose">
+  <li>Your Account page shows our UPI ID, the amount, and your store's 6-character code.</li>
+  <li>Pay from any UPI app and put the store code in the payment note.</li>
+  <li>We match the payment and your plan is active, usually the same working day. Your receipt appears on the Account page.</li>
+</ol>
+<p class="prose">Paying early never loses days: the new period starts when the current one ends. You get reminders 7 days and 1 day before your trial or paid period ends.</p>
+
+<h2>If a payment is late</h2>
+<ul class="prose">
+  <li>For the first 7 days after the end date, everything keeps working and a banner reminds you.</li>
+  <li>After that, the store becomes read-only: you and your staff can see everything but can't make changes or new sales until you pay. Web orders still arrive and wait for you.</li>
+  <li>You can always download all your data from the Account page, even when read-only or closed.</li>
+</ul>
+<p class="prose">Questions about price, or a store with several branches? <a href="demo.html">Talk to us</a>. Refunds are covered in the <a href="refund.html">refund policy</a>.</p>
+<div class="cta-row"><a class="btn" href="{{signupUrl}}">Start free trial</a></div>

@@ -1,0 +1,47 @@
+# B2 · LOCAL ONLY. `docker compose up` loads this file automatically; production must not ship it.
+# Gives the api and worker a private S3-compatible bucket (SeaweedFS) so image uploads and CSV imports work on your laptop.
+# MinIO no longer publishes images on Docker Hub, so it was replaced here.
+services:
+  # Lets npm test on your laptop reach this database (only from your own machine). Guide 2.5.
+  db:
+    ports: ["127.0.0.1:5433:5432"]
+
+  s3:
+    image: chrislusf/seaweedfs:4.48
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        cat > /tmp/s3.json <<'JSON'
+        {"identities":[{"name":"local","credentials":[{"accessKey":"local-s3","secretKey":"local-s3-secret"}],"actions":["Admin","Read","Write","List","Tagging"]}]}
+        JSON
+        exec weed server -dir=/data -ip.bind=0.0.0.0 -volume.max=0 -s3 -s3.port=8333 -s3.config=/tmp/s3.json
+    environment:
+      WEED_S3_SSE_KEY: local-s3-encryption-key   # lets the app's AES256 server-side encryption work locally
+    volumes: [s3data:/data]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/healthz || exit 1"]
+      interval: 5s
+      retries: 20
+
+  s3-init:
+    image: amazon/aws-cli:2.38.1
+    depends_on: { s3: { condition: service_healthy } }
+    environment:
+      AWS_ACCESS_KEY_ID: local-s3
+      AWS_SECRET_ACCESS_KEY: local-s3-secret
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c", "aws --endpoint-url http://s3:8333 s3api head-bucket --bucket erp-local 2>/dev/null || aws --endpoint-url http://s3:8333 s3api create-bucket --bucket erp-local"]
+    restart: "no"
+
+  api: &s3env
+    environment:
+      S3_ENDPOINT: http://s3:8333
+      S3_BUCKET: erp-local
+      S3_ACCESS_KEY_ID: local-s3
+      S3_SECRET_ACCESS_KEY: local-s3-secret
+    depends_on: { s3-init: { condition: service_completed_successfully } }
+
+  worker: *s3env
+
+volumes:
+  s3data:

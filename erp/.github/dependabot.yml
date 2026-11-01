@@ -1,0 +1,22 @@
+# B7: weekly update proposals. Each one is a pull request that must pass CI like any other change; never merge
+# one blind. Security fixes arrive straight away regardless of this schedule.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch: { update-types: [minor, patch] }
+  - package-ecosystem: npm
+    directory: /tests/e2e
+    schedule: { interval: monthly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+  - package-ecosystem: docker
+    directory: /apps/api
+    schedule: { interval: weekly, day: monday }
+  - package-ecosystem: docker
+    directory: /apps/web
+    schedule: { interval: weekly, day: monday }

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run erp-backup at 03:00 IST every night
+
+[Timer]
+OnCalendar=*-*-* 21:30:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

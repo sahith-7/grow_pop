@@ -1,0 +1,85 @@
+name: ci
+# B7: actions pinned to commit SHAs (a moved tag cannot change what runs), least-privilege token, migrations run as a
+# non-superuser like RDS (D77), secret scan, image scan. Dependabot (.github/dependabot.yml) proposes SHA bumps.
+on: [push, pull_request]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+        env: { POSTGRES_PASSWORD: owner, POSTGRES_DB: postgres }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 10
+    env:
+      # erp_mig is NOT a superuser, the same as the RDS master user. A superuser ignores RLS and FORCE, which once hid
+      # a production-only bug (D74), so CI migrates as erp_mig and the app's functions are owned by it.
+      MIGRATION_DATABASE_URL: postgres://erp_mig:mig@localhost:5432/erp
+      DATABASE_URL: postgres://erp_app:runtime@localhost:5432/erp
+      # Tests only: reads that check results across stores (FORCE RLS hides those rows from erp_mig).
+      TEST_SUPERUSER_URL: postgres://postgres:owner@localhost:5432/erp
+      WEB_ORIGIN: http://localhost:3000
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Database roles (as on RDS)
+        run: |
+          PGPASSWORD=owner psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE erp_mig LOGIN CREATEROLE PASSWORD 'mig'" \
+            -c "CREATE DATABASE erp OWNER erp_mig" \
+            -c "CREATE ROLE erp_rt NOLOGIN" \
+            -c "CREATE ROLE erp_app LOGIN PASSWORD 'runtime' IN ROLE erp_rt"
+      - run: npm run typecheck
+      - run: npm run build -w apps/api
+      - run: npm run migrate -w apps/api
+      - run: npm test
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run build -w apps/web
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 22 }
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Secret scan (gitleaks, whole history)
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" \
+            ghcr.io/gitleaks/gitleaks:v8.28.0@sha256:cdbb7c955abce02001a9f6c9f602fb195b7fadc1e812065883f695d1eeaba854 \
+            git /repo --redact --no-banner
+
+  images:
+    # Builds the two production images and fails on HIGH/CRITICAL vulnerabilities that have a fix available.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with: { persist-credentials: false }
+      - run: docker build -f apps/api/Dockerfile -t erp-api:ci .
+      - run: docker build -f apps/web/Dockerfile --build-arg API_URL=http://api:4000 -t erp-web:ci .
+      - name: Trivy
+        run: |
+          for img in erp-api:ci erp-web:ci; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy:0.67.2@sha256:e2b22eac59c02003d8749f5b8d9bd073b62e30fefaef5b7c8371204e0a4b0c08 \
+              image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress "$img"
+          done

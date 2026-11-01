@@ -1,0 +1,52 @@
+# Staging and production on one EC2 server (B7, D78). Not for laptops: use docker-compose.yml there.
+# Used only by ops/deploy.sh, which writes app.env and migrate.env from SSM Parameter Store and sets ERP_REGISTRY and
+# ERP_TAG. The database is RDS. Nothing listens on a public port: cloudflared connects out to Cloudflare and is the
+# only way in, so the server's security group allows no inbound traffic at all.
+name: erp
+
+x-locked: &locked
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: awslogs   # CloudWatch, kept 180 days in Mumbai (CERT-In); see docs/runbooks/production-setup.md
+    options: { awslogs-region: ap-south-1, awslogs-group: "/erp/${ERP_ENV:?}", awslogs-create-group: "false", tag: "{{.Name}}" }
+
+x-api: &api
+  <<: *locked
+  image: ${ERP_REGISTRY:?}/erp-api:${ERP_TAG:?}
+  env_file: app.env
+  volumes: ["./certs:/certs:ro"]   # RDS CA bundle for sslmode=verify-full
+
+services:
+  migrate:
+    <<: *api
+    command: ["node", "dist/migrate.js"]
+    env_file: [app.env, migrate.env]   # only this one-off container gets the owner credentials
+    restart: "no"
+
+  api:
+    <<: *api
+    environment:
+      TRUST_PROXY: "1"   # D76: web is the only hop; Cloudflare's appended address is the client
+    depends_on: { migrate: { condition: service_completed_successfully } }
+
+  worker:
+    <<: *api
+    command: ["node", "dist/worker.js"]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    healthcheck: { disable: true }
+
+  web:
+    <<: *locked
+    image: ${ERP_REGISTRY:?}/erp-web:${ERP_TAG:?}
+    depends_on: [api]
+    tmpfs: ["/tmp", "/app/apps/web/.next/cache"]
+
+  cloudflared:
+    <<: *locked
+    image: cloudflare/cloudflared:2025.10.0@sha256:396cd2e6f021275ad09969a1b4f1a7e62ca5349fde62781ce082bb2c18105c70
+    command: ["tunnel", "--no-autoupdate", "run"]
+    env_file: tunnel.env   # TUNNEL_TOKEN only
+    depends_on: [web]

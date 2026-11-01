@@ -1,0 +1,101 @@
+/* ==========================================================================
+   Retail ERP design tokens (Phase 2 visual language, direction A "Ledger")
+   The ONLY file that holds raw colour, font and size values.
+   Components and screens use var(--token) and never literals.
+   Rebrand = edit this file (and brand.ts). Contrast ratios in comments are
+   against --surface (#fff) unless noted; all meet WCAG 2.2 AA.
+   ========================================================================== */
+
+:root {
+  /* ---- Brand ---------------------------------------------------------- */
+  --brand-ink:        #2F45B8;  /* primary actions, links, selection     7.9:1 */
+  --brand-ink-hover:  #24379A;  /*                                       10.1:1 */
+  --brand-ink-soft:   #ECEFFB;  /* selected row, active nav background         */
+  --brand-marigold:   #E8A317;  /* logo mark + scan-ready pulse ONLY, never text on white */
+
+  /* ---- Neutrals (cool, biased toward the brand blue) ------------------ */
+  --bg:               #F6F7F9;  /* app background                               */
+  --surface:          #FFFFFF;  /* panels, tables, inputs                       */
+  --surface-sunken:   #EEF0F4;  /* table header, read-only fields, code         */
+  --border:           #DDE1E8;  /* dividers, panel outlines (decorative)        */
+  --border-control:   #8A93A3;  /* input/checkbox outlines                3.1:1 */
+  --text:             #161B26;  /* body                          16.1:1 on --bg */
+  --text-2:           #4A5363;  /* secondary                                7.8:1 */
+  --text-3:           #626B7D;  /* captions, placeholders                   5.4:1 */
+  --text-on-brand:    #FFFFFF;
+
+  /* ---- Status (never the only signal: always paired with text/icon) --- */
+  --success:          #13723A;  --success-soft: #E8F5EC;   /* 6.0 / 5.4 on soft */
+  --warning:          #8A5300;  --warning-soft: #FDF3E1;   /* 6.3 / 5.8 */
+  --danger:           #B42318;  --danger-soft:  #FDECEA;   /* 6.6 / 5.8 */
+  --info:             #0B6690;  --info-soft:    #E6F3F9;   /* 6.3 / 5.6 */
+  --neutral-badge:    #4A5363;  --neutral-soft: #EEF0F4;
+
+  /* ---- Typography ------------------------------------------------------ */
+  /* IBM Plex: true tabular figures, a Devanagari sibling for Hindi later,
+     open licence. Self-host the woff2 files in production (no third-party
+     font CDN: CSP + privacy + offline-tolerant counters).                  */
+  --font-sans: 'IBM Plex Sans', 'IBM Plex Sans Devanagari', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* scale (px): 12 13 14 16 18 20 24 30 */
+  --text-xs: 0.75rem;   --lh-xs: 1rem;      /* captions, badges           */
+  --text-sm: 0.8125rem; --lh-sm: 1.125rem;  /* table cells, helper text   */
+  --text-md: 0.875rem;  --lh-md: 1.25rem;   /* body, inputs (default)     */
+  --text-lg: 1rem;      --lh-lg: 1.5rem;    /* section titles, POS lines  */
+  --text-xl: 1.125rem;  --lh-xl: 1.5rem;    /* panel titles               */
+  --text-2xl: 1.25rem;  --lh-2xl: 1.75rem;  /* page titles                */
+  --text-3xl: 1.5rem;   --lh-3xl: 2rem;     /* KPI values                 */
+  --text-4xl: 1.875rem; --lh-4xl: 2.25rem;  /* POS total                  */
+  --weight-regular: 400; --weight-medium: 500; --weight-semibold: 600;
+
+  /* ---- Spacing (4 px base) --------------------------------------------- */
+  --space-0: 0;     --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px;  --space-5: 20px; --space-6: 24px; --space-8: 32px;
+  --space-10: 40px; --space-12: 48px;
+
+  /* ---- Sizing ----------------------------------------------------------- */
+  --control-h-sm: 32px;   /* dense toolbars                                 */
+  --control-h:    36px;   /* default buttons/inputs (desktop)               */
+  --control-h-lg: 48px;   /* POS, pick screens, touch (>= 44px target)      */
+  --row-h:        40px;   /* table row, compact                             */
+  --row-h-touch:  52px;   /* table row on counter screens                   */
+  --sidebar-w:    232px;  --sidebar-w-collapsed: 64px;  --topbar-h: 56px;
+  --content-max:  1440px;
+
+  /* ---- Shape & depth ---------------------------------------------------- */
+  --radius-sm: 4px;   /* inputs, badges, buttons */
+  --radius-md: 8px;   /* panels, dialogs         */
+  --radius-pill: 999px;
+  --shadow-overlay: 0 8px 24px rgba(22, 27, 38, .16), 0 2px 6px rgba(22, 27, 38, .08); /* menus, dialogs, toasts only */
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--brand-ink);
+
+  /* ---- Motion ----------------------------------------------------------- */
+  --ease: cubic-bezier(.2, 0, 0, 1);
+  --dur-fast: 120ms;  --dur: 200ms;
+
+  /* ---- Layers ----------------------------------------------------------- */
+  --z-sticky: 10; --z-drawer: 40; --z-overlay: 50; --z-toast: 60;
+
+  color-scheme: light;
+}
+
+/* Dark theme: defined so the tokens are proven theme-safe; NOT enabled in V1.
+   Opt-in by setting data-theme="dark" on <html> once every screen is checked. */
+:root[data-theme="dark"] {
+  --brand-ink: #8EA0FF;  --brand-ink-hover: #A9B7FF;  --brand-ink-soft: #232B4D;
+  --bg: #12151C;  --surface: #1A1E27;  --surface-sunken: #222733;
+  --border: #2E3442;  --border-control: #6B7385;
+  --text: #E7EAF0;  --text-2: #A9B1C0;  --text-3: #8C94A5;  --text-on-brand: #12151C;
+  --success: #5CC98A; --success-soft: #16301F;
+  --warning: #F0B455; --warning-soft: #33270F;
+  --danger:  #FF8A80; --danger-soft:  #3A1A18;
+  --info:    #6CC3EC; --info-soft:    #10293A;
+  --neutral-badge: #A9B1C0; --neutral-soft: #222733;
+  --shadow-overlay: 0 8px 24px rgba(0,0,0,.5);
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
+}

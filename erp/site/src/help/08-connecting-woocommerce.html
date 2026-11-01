@@ -1,0 +1,29 @@
+<!-- title: Connecting your WooCommerce shop; summary: Connect your website, match products, and understand what is sent where and how web orders hold stock. -->
+<div class="prose">
+<p class="breadcrumb"><a href="index.html">Help</a></p>
+<h1>Connecting your WooCommerce shop</h1>
+<p>This needs the Store + Online plan (included in the trial). Only the owner can connect or disconnect.</p>
+<h2>Before you start</h2>
+<ul>
+  <li>Your website must use https and a recent WooCommerce.</li>
+  <li>In WordPress, go to WooCommerce, Settings, Advanced, REST API, and create a key with <strong>Read/Write</strong> permission. Copy the consumer key and secret; WooCommerce shows the secret only once.</li>
+  <li>Make sure your products on the website have SKUs. Matching uses them.</li>
+</ul>
+<h2>Connect</h2>
+<p>In Integrations, WooCommerce, enter your website address and the two keys, and test the connection. The keys are stored encrypted and are never shown again, to anyone.</p>
+<h2>Match your products</h2>
+<p>The software compares your website's products with yours by SKU and shows the result: matched, only on the website, only in the software. Nothing changes on your website until you confirm.</p>
+<h2>What is sent where</h2>
+<ul>
+  <li>For each product you mark "Sell online", the software sends its name, description, price, stock, category and photos to your website. Changes made to those in WooCommerce are overwritten, so make changes in the software.</li>
+  <li>The stock your website shows is what is free at your online location (normally Shop floor): on hand, minus what is held for web orders.</li>
+  <li>Orders come from your website to the software automatically.</li>
+</ul>
+<h2>Web orders and stock</h2>
+<ul>
+  <li>When an order is paid (processing or on-hold), its stock is held for it, so the counter can't sell it.</li>
+  <li>If any item is short, the order waits as "short of stock" and you decide what to do.</li>
+  <li>Stock leaves only when you dispatch the order. Cancelled, failed or refunded orders release their stock.</li>
+</ul>
+<p>If the website is unreachable for a while, changes queue up and are sent when it is back, and a regular check-up fetches any orders that were missed. The Sync health report shows anything stuck.</p>
+</div>

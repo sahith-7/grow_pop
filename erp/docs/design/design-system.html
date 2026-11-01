@@ -1,0 +1,647 @@
+<title>TRIDENT Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Devanagari:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Figtree:wght@400;600&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* ==========================================================================
+   Retail ERP design tokens (Phase 2 visual language, direction A "Ledger")
+   The ONLY file that holds raw colour, font and size values.
+   Components and screens use var(--token) and never literals.
+   Rebrand = edit this file (and brand.ts). Contrast ratios in comments are
+   against --surface (#fff) unless noted; all meet WCAG 2.2 AA.
+   ========================================================================== */
+
+:root {
+  /* ---- Brand ---------------------------------------------------------- */
+  --brand-ink:        #2F45B8;  /* primary actions, links, selection     7.9:1 */
+  --brand-ink-hover:  #24379A;  /*                                       10.1:1 */
+  --brand-ink-soft:   #ECEFFB;  /* selected row, active nav background         */
+  --brand-marigold:   #E8A317;  /* logo mark + scan-ready pulse ONLY, never text on white */
+
+  /* ---- Neutrals (cool, biased toward the brand blue) ------------------ */
+  --bg:               #F6F7F9;  /* app background                               */
+  --surface:          #FFFFFF;  /* panels, tables, inputs                       */
+  --surface-sunken:   #EEF0F4;  /* table header, read-only fields, code         */
+  --border:           #DDE1E8;  /* dividers, panel outlines (decorative)        */
+  --border-control:   #8A93A3;  /* input/checkbox outlines                3.1:1 */
+  --text:             #161B26;  /* body                          16.1:1 on --bg */
+  --text-2:           #4A5363;  /* secondary                                7.8:1 */
+  --text-3:           #626B7D;  /* captions, placeholders                   5.4:1 */
+  --text-on-brand:    #FFFFFF;
+
+  /* ---- Status (never the only signal: always paired with text/icon) --- */
+  --success:          #13723A;  --success-soft: #E8F5EC;   /* 6.0 / 5.4 on soft */
+  --warning:          #8A5300;  --warning-soft: #FDF3E1;   /* 6.3 / 5.8 */
+  --danger:           #B42318;  --danger-soft:  #FDECEA;   /* 6.6 / 5.8 */
+  --info:             #0B6690;  --info-soft:    #E6F3F9;   /* 6.3 / 5.6 */
+  --neutral-badge:    #4A5363;  --neutral-soft: #EEF0F4;
+
+  /* ---- Typography ------------------------------------------------------ */
+  /* IBM Plex: true tabular figures, a Devanagari sibling for Hindi later,
+     open licence. Self-host the woff2 files in production (no third-party
+     font CDN: CSP + privacy + offline-tolerant counters).                  */
+  --font-sans: 'IBM Plex Sans', 'IBM Plex Sans Devanagari', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* scale (px): 12 13 14 16 18 20 24 30 */
+  --text-xs: 0.75rem;   --lh-xs: 1rem;      /* captions, badges           */
+  --text-sm: 0.8125rem; --lh-sm: 1.125rem;  /* table cells, helper text   */
+  --text-md: 0.875rem;  --lh-md: 1.25rem;   /* body, inputs (default)     */
+  --text-lg: 1rem;      --lh-lg: 1.5rem;    /* section titles, POS lines  */
+  --text-xl: 1.125rem;  --lh-xl: 1.5rem;    /* panel titles               */
+  --text-2xl: 1.25rem;  --lh-2xl: 1.75rem;  /* page titles                */
+  --text-3xl: 1.5rem;   --lh-3xl: 2rem;     /* KPI values                 */
+  --text-4xl: 1.875rem; --lh-4xl: 2.25rem;  /* POS total                  */
+  --weight-regular: 400; --weight-medium: 500; --weight-semibold: 600;
+
+  /* ---- Spacing (4 px base) --------------------------------------------- */
+  --space-0: 0;     --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px;  --space-5: 20px; --space-6: 24px; --space-8: 32px;
+  --space-10: 40px; --space-12: 48px;
+
+  /* ---- Sizing ----------------------------------------------------------- */
+  --control-h-sm: 32px;   /* dense toolbars                                 */
+  --control-h:    36px;   /* default buttons/inputs (desktop)               */
+  --control-h-lg: 48px;   /* POS, pick screens, touch (>= 44px target)      */
+  --row-h:        40px;   /* table row, compact                             */
+  --row-h-touch:  52px;   /* table row on counter screens                   */
+  --sidebar-w:    232px;  --sidebar-w-collapsed: 64px;  --topbar-h: 56px;
+  --content-max:  1440px;
+
+  /* ---- Shape & depth ---------------------------------------------------- */
+  --radius-sm: 4px;   /* inputs, badges, buttons */
+  --radius-md: 8px;   /* panels, dialogs         */
+  --radius-pill: 999px;
+  --shadow-overlay: 0 8px 24px rgba(22, 27, 38, .16), 0 2px 6px rgba(22, 27, 38, .08); /* menus, dialogs, toasts only */
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--brand-ink);
+
+  /* ---- Motion ----------------------------------------------------------- */
+  --ease: cubic-bezier(.2, 0, 0, 1);
+  --dur-fast: 120ms;  --dur: 200ms;
+
+  /* ---- Layers ----------------------------------------------------------- */
+  --z-sticky: 10; --z-drawer: 40; --z-overlay: 50; --z-toast: 60;
+
+  color-scheme: light;
+}
+
+/* Dark theme: defined so the tokens are proven theme-safe; NOT enabled in V1.
+   Opt-in by setting data-theme="dark" on <html> once every screen is checked. */
+:root[data-theme="dark"] {
+  --brand-ink: #8EA0FF;  --brand-ink-hover: #A9B7FF;  --brand-ink-soft: #232B4D;
+  --bg: #12151C;  --surface: #1A1E27;  --surface-sunken: #222733;
+  --border: #2E3442;  --border-control: #6B7385;
+  --text: #E7EAF0;  --text-2: #A9B1C0;  --text-3: #8C94A5;  --text-on-brand: #12151C;
+  --success: #5CC98A; --success-soft: #16301F;
+  --warning: #F0B455; --warning-soft: #33270F;
+  --danger:  #FF8A80; --danger-soft:  #3A1A18;
+  --info:    #6CC3EC; --info-soft:    #10293A;
+  --neutral-badge: #A9B1C0; --neutral-soft: #222733;
+  --shadow-overlay: 0 8px 24px rgba(0,0,0,.5);
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
+}
+
+/* ==========================================================================
+   Retail ERP components (Phase 2, visual language). Depends on tokens.css.
+   Framework-agnostic: React components in apps/web render these class names.
+   All classes are prefixed ui- so they cannot collide with Phase 1 styles.
+   ========================================================================== */
+
+/* ---- Base --------------------------------------------------------------- */
+.ui-root, .ui-root * { box-sizing: border-box; }
+.ui-root {
+  font-family: var(--font-sans); font-size: var(--text-md); line-height: var(--lh-md);
+  color: var(--text); background: var(--bg);
+  font-feature-settings: 'tnum' 0; -webkit-font-smoothing: antialiased;
+}
+.ui-root :focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-sm); }
+.ui-num, .ui-money, .ui-qty { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ui-code { font-family: var(--font-mono); font-size: var(--text-sm); letter-spacing: 0; }
+.ui-muted { color: var(--text-2); }
+.ui-caption { font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--text-3); }
+.ui-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ui-h1 { font-size: var(--text-2xl); line-height: var(--lh-2xl); font-weight: var(--weight-semibold); margin: 0; text-wrap: balance; }
+.ui-h2 { font-size: var(--text-xl); line-height: var(--lh-xl); font-weight: var(--weight-semibold); margin: 0; }
+.ui-h3 { font-size: var(--text-lg); line-height: var(--lh-lg); font-weight: var(--weight-semibold); margin: 0; }
+.ui-eyebrow { font-size: var(--text-xs); line-height: var(--lh-xs); font-weight: var(--weight-semibold); letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+
+/* ---- App shell ---------------------------------------------------------- */
+.ui-shell { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); min-height: 100%; }
+.ui-sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: var(--space-4) var(--space-3); display: flex; flex-direction: column; gap: var(--space-5); position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.ui-brand { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-2); font-weight: var(--weight-semibold); font-size: var(--text-lg); }
+.ui-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.ui-nav-group > .ui-eyebrow { padding: 0 var(--space-2) var(--space-1); }
+.ui-nav-link { display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-h-sm); padding: 0 var(--space-2); border-radius: var(--radius-sm); color: var(--text); text-decoration: none; font-size: var(--text-md); }
+.ui-nav-link:hover { background: var(--surface-sunken); }
+.ui-nav-link[aria-current="page"] { background: var(--brand-ink-soft); color: var(--brand-ink); font-weight: var(--weight-semibold); }
+.ui-nav-link .ui-count { margin-left: auto; }
+.ui-topbar { height: var(--topbar-h); display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-6); border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: var(--z-sticky); }
+.ui-main { min-width: 0; display: flex; flex-direction: column; }
+.ui-content { width: 100%; max-width: var(--content-max); padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); }
+.ui-page-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.ui-page-header .ui-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ui-shell--focus { grid-template-columns: minmax(0, 1fr); }      /* POS, pick: no sidebar */
+.ui-shell--focus .ui-sidebar { display: none; }
+
+/* ---- Buttons ------------------------------------------------------------ */
+.ui-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: var(--control-h); padding: 0 var(--space-4); border-radius: var(--radius-sm); border: 1px solid var(--border-control); background: var(--surface); color: var(--text); font: inherit; font-weight: var(--weight-medium); white-space: nowrap; cursor: pointer; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.ui-btn:hover { background: var(--surface-sunken); }
+.ui-btn--primary { background: var(--brand-ink); border-color: var(--brand-ink); color: var(--text-on-brand); }
+.ui-btn--primary:hover { background: var(--brand-ink-hover); border-color: var(--brand-ink-hover); }
+.ui-btn--danger { background: var(--surface); border-color: var(--danger); color: var(--danger); }
+.ui-btn--danger:hover { background: var(--danger-soft); }
+.ui-btn--ghost { border-color: transparent; background: transparent; color: var(--brand-ink); }
+.ui-btn--ghost:hover { background: var(--brand-ink-soft); }
+.ui-btn--sm { height: var(--control-h-sm); padding: 0 var(--space-3); font-size: var(--text-sm); }
+.ui-btn--lg { height: var(--control-h-lg); padding: 0 var(--space-5); font-size: var(--text-lg); }
+.ui-btn--block { width: 100%; }
+.ui-btn--icon { width: var(--control-h); padding: 0; }
+.ui-btn[disabled], .ui-btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+.ui-btn[aria-busy="true"] { position: relative; color: transparent; pointer-events: none; }
+.ui-btn[aria-busy="true"]::after { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-color: var(--text-3) transparent var(--text-3) var(--text-3); animation: ui-spin .7s linear infinite; }
+.ui-btn--primary[aria-busy="true"]::after { border-color: var(--text-on-brand) transparent var(--text-on-brand) var(--text-on-brand); }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+
+/* ---- Form fields -------------------------------------------------------- */
+.ui-field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.ui-label { font-size: var(--text-sm); line-height: var(--lh-sm); font-weight: var(--weight-medium); color: var(--text); }
+.ui-label .ui-req { color: var(--danger); margin-left: 2px; }
+.ui-help { font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--text-3); }
+.ui-error { font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--danger); display: flex; gap: var(--space-1); }
+.ui-input, .ui-select, .ui-textarea { width: 100%; height: var(--control-h); padding: 0 var(--space-3); border: 1px solid var(--border-control); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: inherit; }
+.ui-textarea { height: auto; min-height: 88px; padding: var(--space-2) var(--space-3); resize: vertical; }
+.ui-input::placeholder { color: var(--text-3); }
+.ui-input[aria-invalid="true"], .ui-select[aria-invalid="true"] { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
+.ui-input[readonly] { background: var(--surface-sunken); }
+.ui-input--num { text-align: right; font-variant-numeric: tabular-nums; }
+.ui-input-group { display: flex; align-items: stretch; }
+.ui-input-group > .ui-addon { display: flex; align-items: center; padding: 0 var(--space-3); border: 1px solid var(--border-control); background: var(--surface-sunken); color: var(--text-2); }
+.ui-input-group > .ui-addon:first-child { border-right: 0; border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.ui-input-group > .ui-addon:last-child { border-left: 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.ui-input-group > .ui-input { border-radius: 0; }
+.ui-input-group > .ui-input:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.ui-input-group > .ui-input:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.ui-check { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--control-h-sm); cursor: pointer; }
+.ui-check input { width: 16px; height: 16px; accent-color: var(--brand-ink); margin: 0; }
+.ui-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-4); }
+.ui-form-grid .ui-span-all { grid-column: 1 / -1; }
+.ui-form-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--border); }
+
+/* Qty stepper (POS, receiving) */
+.ui-stepper { display: inline-flex; align-items: center; border: 1px solid var(--border-control); border-radius: var(--radius-sm); overflow: hidden; }
+.ui-stepper button { width: var(--control-h); height: var(--control-h); border: 0; background: var(--surface-sunken); color: var(--text); font: inherit; font-size: var(--text-lg); cursor: pointer; }
+.ui-stepper input { width: 56px; height: var(--control-h); border: 0; text-align: center; font: inherit; font-variant-numeric: tabular-nums; background: var(--surface); color: var(--text); }
+
+/* Scan field: always-focused capture for keyboard-wedge scanners */
+.ui-scan { display: flex; align-items: center; gap: var(--space-3); height: var(--control-h-lg); padding: 0 var(--space-4); border: 2px solid var(--brand-ink); border-radius: var(--radius-md); background: var(--surface); }
+.ui-scan input { flex: 1; min-width: 0; border: 0; outline: none; font: inherit; font-size: var(--text-lg); background: transparent; color: var(--text); }
+.ui-scan .ui-scan-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand-marigold); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-marigold) 30%, transparent); }
+.ui-scan[data-state="ok"] { border-color: var(--success); }
+.ui-scan[data-state="error"] { border-color: var(--danger); animation: ui-shake var(--dur) var(--ease); }
+@keyframes ui-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+/* ---- Badges & status ---------------------------------------------------- */
+.ui-badge { display: inline-flex; align-items: center; gap: var(--space-1); height: 22px; padding: 0 var(--space-2); border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: var(--weight-semibold); white-space: nowrap; background: var(--neutral-soft); color: var(--neutral-badge); }
+.ui-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ui-badge--success { background: var(--success-soft); color: var(--success); }
+.ui-badge--warning { background: var(--warning-soft); color: var(--warning); }
+.ui-badge--danger  { background: var(--danger-soft);  color: var(--danger); }
+.ui-badge--info    { background: var(--info-soft);    color: var(--info); }
+.ui-badge--brand   { background: var(--brand-ink-soft); color: var(--brand-ink); }
+.ui-count { display: inline-flex; min-width: 20px; height: 20px; padding: 0 6px; align-items: center; justify-content: center; border-radius: var(--radius-pill); background: var(--danger); color: var(--text-on-brand); font-size: var(--text-xs); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
+
+/* ---- Alerts, toasts ----------------------------------------------------- */
+.ui-alert { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); border: 1px solid; background: var(--surface); }
+.ui-alert > :first-child { flex-shrink: 0; font-weight: var(--weight-semibold); }
+.ui-alert .ui-alert-body { flex: 1; min-width: 0; color: var(--text); }
+.ui-alert .ui-actions { display: flex; gap: var(--space-2); flex-shrink: 0; }
+.ui-alert--info    { border-color: var(--info);    background: var(--info-soft); }
+.ui-alert--success { border-color: var(--success); background: var(--success-soft); }
+.ui-alert--warning { border-color: var(--warning); background: var(--warning-soft); }
+.ui-alert--danger  { border-color: var(--danger);  background: var(--danger-soft); }
+.ui-alert--info > :first-child { color: var(--info); } .ui-alert--success > :first-child { color: var(--success); }
+.ui-alert--warning > :first-child { color: var(--warning); } .ui-alert--danger > :first-child { color: var(--danger); }
+.ui-toast-region { position: fixed; right: var(--space-6); bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: var(--space-2); z-index: var(--z-toast); }
+.ui-toast { min-width: 280px; max-width: 420px; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--text); color: var(--surface); box-shadow: var(--shadow-overlay); display: flex; gap: var(--space-3); align-items: center; }
+.ui-toast a, .ui-toast button { color: inherit; font-weight: var(--weight-semibold); background: none; border: 0; font: inherit; text-decoration: underline; cursor: pointer; }
+
+/* ---- Panels, KPI tiles -------------------------------------------------- */
+.ui-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); min-width: 0; }
+.ui-panel-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.ui-panel-head .ui-actions { margin-left: auto; display: flex; gap: var(--space-2); }
+.ui-panel-body { padding: var(--space-4); }
+.ui-kpi { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); }
+.ui-kpi-value { font-size: var(--text-3xl); line-height: var(--lh-3xl); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
+.ui-kpi-delta { font-size: var(--text-xs); font-weight: var(--weight-medium); }
+.ui-kpi-delta[data-dir="up"] { color: var(--success); } .ui-kpi-delta[data-dir="down"] { color: var(--danger); }
+.ui-list-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.ui-list-row:last-child { border-bottom: 0; }
+.ui-list-row > :last-child { margin-left: auto; }
+
+/* ---- Tables ------------------------------------------------------------- */
+.ui-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.ui-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--text-sm); line-height: var(--lh-sm); }
+.ui-table th { position: sticky; top: 0; z-index: 1; background: var(--surface-sunken); color: var(--text-2); font-weight: var(--weight-semibold); text-align: left; font-size: var(--text-xs); letter-spacing: .02em; padding: 0 var(--space-3); height: 36px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.ui-table td { padding: 0 var(--space-3); height: var(--row-h); border-bottom: 1px solid var(--border); vertical-align: middle; }
+.ui-table td.ui-wrap { white-space: normal; padding-block: var(--space-2); }
+.ui-table .ui-num, .ui-table .ui-money, .ui-table .ui-qty { text-align: right; }
+.ui-table th[aria-sort] button { all: unset; cursor: pointer; display: inline-flex; gap: var(--space-1); }
+.ui-table tbody tr:hover td { background: var(--bg); }
+.ui-table tbody tr[aria-selected="true"] td { background: var(--brand-ink-soft); }
+.ui-table tr[data-tone="danger"] td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.ui-table tr[data-tone="warning"] td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
+.ui-table--touch td { height: var(--row-h-touch); font-size: var(--text-md); }
+.ui-table .ui-cell-title { font-weight: var(--weight-medium); color: var(--text); }
+.ui-table .ui-cell-sub { font-size: var(--text-xs); color: var(--text-3); }
+.ui-thumb { width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--surface-sunken); object-fit: cover; flex-shrink: 0; }
+
+/* Toolbar above tables: search, filter chips, bulk actions */
+.ui-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.ui-toolbar .ui-search { flex: 1 1 280px; max-width: 420px; }
+.ui-chip { display: inline-flex; align-items: center; gap: var(--space-1); height: var(--control-h-sm); padding: 0 var(--space-3); border: 1px dashed var(--border-control); border-radius: var(--radius-pill); background: var(--surface); color: var(--text-2); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.ui-chip[aria-pressed="true"] { border-style: solid; border-color: var(--brand-ink); background: var(--brand-ink-soft); color: var(--brand-ink); }
+.ui-bulkbar { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); background: var(--brand-ink-soft); color: var(--brand-ink); font-weight: var(--weight-medium); }
+.ui-pager { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); font-size: var(--text-sm); color: var(--text-2); }
+
+/* Mobile: tables marked data-collapse become stacked cards under 768px */
+@media (max-width: 767px) {
+  .ui-table[data-collapse] thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .ui-table[data-collapse], .ui-table[data-collapse] tbody, .ui-table[data-collapse] tr, .ui-table[data-collapse] td { display: block; width: 100%; }
+  .ui-table[data-collapse] tr { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+  .ui-table[data-collapse] td { height: auto; border: 0; padding: 2px 0; display: flex; justify-content: space-between; gap: var(--space-3); text-align: right; }
+  .ui-table[data-collapse] td::before { content: attr(data-label); color: var(--text-3); font-size: var(--text-xs); text-align: left; }
+  .ui-table[data-collapse] td[data-primary] { font-size: var(--text-md); justify-content: flex-start; text-align: left; }
+  .ui-table[data-collapse] td[data-primary]::before { content: none; }
+}
+
+/* ---- Tabs, segmented, steps --------------------------------------------- */
+.ui-tabs { display: flex; gap: var(--space-4); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.ui-tab { all: unset; cursor: pointer; padding: var(--space-2) 0; color: var(--text-2); font-weight: var(--weight-medium); border-bottom: 2px solid transparent; white-space: nowrap; }
+.ui-tab[aria-selected="true"] { color: var(--brand-ink); border-bottom-color: var(--brand-ink); }
+.ui-segmented { display: inline-flex; padding: 2px; background: var(--surface-sunken); border-radius: var(--radius-sm); gap: 2px; }
+.ui-segmented button { all: unset; cursor: pointer; padding: 0 var(--space-3); height: 28px; border-radius: 3px; font-size: var(--text-sm); color: var(--text-2); }
+.ui-segmented button[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: 0 1px 2px rgba(22,27,38,.12); }
+.ui-steps { display: flex; gap: var(--space-2); list-style: none; padding: 0; margin: 0; flex-wrap: wrap; }
+.ui-steps li { display: flex; align-items: center; gap: var(--space-2); color: var(--text-3); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.ui-steps li::before { content: attr(data-n); display: inline-flex; width: 22px; height: 22px; border-radius: 50%; align-items: center; justify-content: center; border: 1px solid var(--border-control); font-size: var(--text-xs); }
+.ui-steps li[aria-current="step"] { color: var(--brand-ink); } .ui-steps li[aria-current="step"]::before { background: var(--brand-ink); border-color: var(--brand-ink); color: var(--text-on-brand); }
+.ui-steps li[data-done]::before { content: "✓"; background: var(--success-soft); border-color: var(--success); color: var(--success); }
+.ui-steps li + li { padding-left: var(--space-2); border-left: 1px solid var(--border); }
+
+/* ---- Overlays ----------------------------------------------------------- */
+.ui-backdrop { position: fixed; inset: 0; background: rgba(22, 27, 38, .45); z-index: var(--z-overlay); display: grid; place-items: center; padding: var(--space-4); }
+.ui-dialog { width: min(520px, 100%); max-height: calc(100% - var(--space-8)); overflow: auto; background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow-overlay); display: flex; flex-direction: column; }
+.ui-dialog-head { padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border); }
+.ui-dialog-body { padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4); }
+.ui-dialog-foot { padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: var(--space-2); }
+.ui-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 100%); background: var(--surface); box-shadow: var(--shadow-overlay); z-index: var(--z-drawer); display: flex; flex-direction: column; }
+.ui-menu { min-width: 180px; padding: var(--space-1); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-overlay); }
+.ui-menu [role="menuitem"] { display: flex; align-items: center; height: var(--control-h-sm); padding: 0 var(--space-3); border-radius: var(--radius-sm); cursor: pointer; }
+.ui-menu [role="menuitem"]:hover, .ui-menu [role="menuitem"]:focus-visible { background: var(--surface-sunken); }
+
+/* ---- States: empty, loading, error -------------------------------------- */
+.ui-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--space-2); padding: var(--space-12) var(--space-4); color: var(--text-2); }
+.ui-empty .ui-h3 { color: var(--text); }
+.ui-empty .ui-actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); flex-wrap: wrap; justify-content: center; }
+.ui-skeleton { display: block; height: 12px; border-radius: var(--radius-sm); background: linear-gradient(90deg, var(--surface-sunken) 0%, var(--border) 50%, var(--surface-sunken) 100%); background-size: 200% 100%; animation: ui-shimmer 1.2s linear infinite; }
+@keyframes ui-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .ui-skeleton, .ui-btn[aria-busy="true"]::after, .ui-scan[data-state="error"] { animation: none; } }
+.ui-progress { height: 6px; border-radius: var(--radius-pill); background: var(--surface-sunken); overflow: hidden; }
+.ui-progress > span { display: block; height: 100%; background: var(--brand-ink); }
+.ui-kbd { font-family: var(--font-mono); font-size: var(--text-xs); padding: 1px 6px; border: 1px solid var(--border-control); border-bottom-width: 2px; border-radius: var(--radius-sm); background: var(--surface); color: var(--text-2); }
+.ui-correlation { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-3); }
+
+/* ---- Responsive shell --------------------------------------------------- */
+@media (max-width: 1279px) {
+  .ui-shell { grid-template-columns: var(--sidebar-w-collapsed) minmax(0, 1fr); }
+  .ui-sidebar .ui-nav-label, .ui-sidebar .ui-eyebrow, .ui-brand-name { display: none; }
+  .ui-nav-link { justify-content: center; }
+}
+@media (max-width: 767px) {
+  .ui-shell { grid-template-columns: minmax(0, 1fr); }
+  .ui-sidebar { display: none; }                      /* opened as a drawer from the top bar */
+  .ui-sidebar[data-open] { display: flex; position: fixed; inset: 0 auto 0 0; width: min(300px, 85vw); z-index: var(--z-drawer); box-shadow: var(--shadow-overlay); }
+  .ui-sidebar[data-open] .ui-nav-label, .ui-sidebar[data-open] .ui-eyebrow, .ui-sidebar[data-open] .ui-brand-name { display: revert; }
+  .ui-topbar { padding: 0 var(--space-4); }
+  .ui-content { padding: var(--space-4); }
+  .ui-page-header .ui-actions { margin-left: 0; width: 100%; }
+}
+@media (pointer: coarse) {
+  .ui-btn, .ui-input, .ui-select { min-height: 44px; }
+  .ui-table td { height: var(--row-h-touch); }
+}
+
+/* ---- documentation page only (not part of the product CSS) ---- */
+body{margin:0;background:var(--bg);color:var(--text)}
+.doc{max-width:1200px;margin:0 auto;padding-inline:16px;padding-block:32px 64px;display:flex;flex-direction:column;gap:56px}
+.doc-hero{display:flex;flex-direction:column;gap:12px;max-width:72ch}
+.doc-hero h1{font-size:2rem;line-height:2.5rem;margin:0;font-weight:600;text-wrap:balance}
+.doc-hero p{margin:0;color:var(--text-2);line-height:1.6}
+.doc-toc{display:flex;flex-wrap:wrap;gap:8px}
+.doc-toc a{font-size:var(--text-sm);color:var(--brand-ink);text-decoration:none;padding:4px 10px;border:1px solid var(--border);border-radius:var(--radius-pill);background:var(--surface)}
+section.s{display:flex;flex-direction:column;gap:20px}
+section.s>header{display:flex;flex-direction:column;gap:6px;max-width:75ch}
+section.s>header h2{font-size:1.5rem;line-height:2rem;margin:0;font-weight:600}
+section.s>header p{margin:0;color:var(--text-2);line-height:1.6}
+.cols{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))}
+.cols-4{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr))}
+.dir{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;background:var(--surface)}
+.dir .mock{padding:16px;display:flex;flex-direction:column;gap:10px;min-height:190px}
+.dir .meta{padding:14px 16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px;font-size:var(--text-sm);color:var(--text-2);line-height:1.5}
+.dir .meta b{color:var(--text);font-size:var(--text-lg)}
+.dir.pick{outline:2px solid var(--brand-ink);outline-offset:-1px}
+.swatches{display:flex;gap:6px}
+.swatches i{width:28px;height:28px;border-radius:4px;border:1px solid rgba(0,0,0,.08)}
+.sw{border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;background:var(--surface);font-size:var(--text-sm)}
+.sw .chip{height:56px}
+.sw .t{padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.sw .t span{color:var(--text-3);font-family:var(--font-mono);font-size:var(--text-xs)}
+.typerow{display:grid;grid-template-columns:110px 1fr;gap:16px;align-items:baseline;padding:10px 0;border-bottom:1px solid var(--border)}
+.typerow code{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text-3)}
+.spacebar{display:flex;align-items:center;gap:12px;font-size:var(--text-sm)}
+.spacebar i{display:block;height:12px;background:var(--brand-ink);border-radius:2px}
+.spacebar code{width:90px;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text-3)}
+.specimen{padding:20px;display:flex;flex-direction:column;gap:16px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.rules{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}
+.rule{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;display:flex;flex-direction:column;gap:8px}
+.rule h3{margin:0;font-size:var(--text-lg)}
+.rule ul{margin:0;padding-left:18px;color:var(--text-2);line-height:1.6;font-size:var(--text-md)}
+.rule ul b{color:var(--text)}
+.dodont{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:640px){.dodont{grid-template-columns:1fr}.typerow{grid-template-columns:1fr}}
+.mark{display:inline-flex;align-items:center;gap:10px;font-weight:600;font-size:1.5rem}
+.names{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))}
+.name{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;display:flex;flex-direction:column;gap:8px;line-height:1.5}
+.name.pick{outline:2px solid var(--brand-ink);outline-offset:-1px}
+.name .n{font-size:1.375rem;font-weight:600;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.name .n small{font-size:var(--text-sm);font-weight:400;color:var(--text-3)}
+.name p{margin:0;color:var(--text-2);font-size:var(--text-md)}
+.tbl{overflow-x:auto}
+.tbl table{border-collapse:collapse;width:100%;font-size:var(--text-sm)}
+.tbl th,.tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.tbl th{color:var(--text-2);font-weight:600;background:var(--surface-sunken)}
+.demo-dialog{position:relative;background:rgba(22,27,38,.45);border-radius:var(--radius-md);padding:24px;display:grid;place-items:center}
+</style>
+
+<div class="ui-root">
+<div class="doc">
+
+<div class="doc-hero">
+  <span class="ui-eyebrow">Phase 2 · Visual language · for approval</span>
+  <h1>TRIDENT design system</h1>
+  <p>One visual language for every screen of the retail ERP: the counter, the stockroom and the owner's dashboard. Tokens live in <code class="ui-code">tokens.css</code>, components in <code class="ui-code">components.css</code>. This page uses those two files unchanged, so what you see here is exactly what the app gets.</p>
+  <nav class="doc-toc" aria-label="Sections">
+    <a href="#directions">Directions</a><a href="#identity">Name &amp; identity</a><a href="#color">Colour</a><a href="#type">Type</a><a href="#space">Spacing &amp; shape</a><a href="#components">Components</a><a href="#states">States</a><a href="#responsive">Responsive</a><a href="#a11y">Accessibility</a>
+  </nav>
+</div>
+
+<!-- ================= DIRECTIONS ================= -->
+<section class="s" id="directions">
+  <header><h2>Visual directions explored</h2><p>Three directions were tested against the same stock table. A is recommended and is what the rest of this page uses.</p></header>
+  <div class="cols">
+    <article class="dir pick">
+      <div class="mock" style="background:#F6F7F9;font-family:'IBM Plex Sans',sans-serif;color:#161B26">
+        <div style="display:flex;justify-content:space-between;align-items:center"><b>Stock</b><span style="background:#2F45B8;color:#fff;padding:6px 12px;border-radius:4px;font-size:13px">Adjust</span></div>
+        <div style="background:#fff;border:1px solid #DDE1E8;border-radius:8px;font-size:13px">
+          <div style="display:grid;grid-template-columns:1fr 60px 70px;padding:8px 10px;background:#EEF0F4;color:#4A5363;font-weight:600;font-size:11px"><span>SKU</span><span style="text-align:right">On hand</span><span style="text-align:right">Status</span></div>
+          <div style="display:grid;grid-template-columns:1fr 60px 70px;padding:8px 10px;border-top:1px solid #DDE1E8"><span style="font-family:'IBM Plex Mono',monospace">KUR-IND-M</span><span style="text-align:right">14</span><span style="text-align:right;color:#13723A;font-weight:600">OK</span></div>
+          <div style="display:grid;grid-template-columns:1fr 60px 70px;padding:8px 10px;border-top:1px solid #DDE1E8"><span style="font-family:'IBM Plex Mono',monospace">SAN-TAN-8</span><span style="text-align:right">3</span><span style="text-align:right;color:#8A5300;font-weight:600">Low</span></div>
+        </div>
+      </div>
+      <div class="meta"><b>A · Ledger (recommended)</b><div class="swatches"><i style="background:#2F45B8"></i><i style="background:#E8A317"></i><i style="background:#F6F7F9"></i><i style="background:#161B26"></i></div>Neel ink blue on cool paper greys, a marigold spark used only on the logo and the scan-ready dot. IBM Plex Sans with Plex Mono for SKUs. Calm and dense, reads like a well-kept account book. The blue sits clear of every status colour, so red/amber/green always mean status.</div>
+    </article>
+    <article class="dir">
+      <div class="mock" style="background:#FBF8F3;font-family:'Figtree',sans-serif;color:#2A2420">
+        <div style="display:flex;justify-content:space-between;align-items:center"><b>Stock</b><span style="background:#0F6E6A;color:#fff;padding:6px 12px;border-radius:999px;font-size:13px">Adjust</span></div>
+        <div style="background:#fff;border:1px solid #EAE2D6;border-radius:12px;font-size:13px">
+          <div style="display:grid;grid-template-columns:1fr 60px 70px;padding:8px 10px;color:#7A6E62;font-weight:600;font-size:11px"><span>SKU</span><span style="text-align:right">On hand</span><span style="text-align:right">Status</span></div>
+          <div style="display:grid;grid-template-columns:1fr 60px 70px;padding:8px 10px;border-top:1px solid #EAE2D6"><span>KUR-IND-M</span><span style="text-align:right">14</span><span style="text-align:right;color:#0F6E6A;font-weight:600">OK</span></div>
+          <div style="display:grid;grid-template-columns:1fr 60px 70px;padding:8px 10px;border-top:1px solid #EAE2D6"><span>SAN-TAN-8</span><span style="text-align:right">3</span><span style="text-align:right;color:#B7791F;font-weight:600">Low</span></div>
+        </div>
+      </div>
+      <div class="meta"><b>B · Haat</b><div class="swatches"><i style="background:#0F6E6A"></i><i style="background:#F2A900"></i><i style="background:#FBF8F3"></i><i style="background:#2A2420"></i></div>Teal and marigold on warm paper, rounder shapes, Figtree. Friendlier for small shop owners, but the teal primary collides with "success" green in tables and the warm greys lower contrast on long data screens. Rejected.</div>
+    </article>
+    <article class="dir">
+      <div class="mock" style="background:#FFFFFF;font-family:'Source Sans 3',sans-serif;color:#111827">
+        <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:18px">Stock</b><span style="background:#1F2937;color:#fff;padding:10px 16px;border-radius:2px;font-size:15px;font-weight:600">ADJUST</span></div>
+        <div style="border:2px solid #1F2937;font-size:15px">
+          <div style="display:grid;grid-template-columns:1fr 60px 70px;padding:10px;background:#1F2937;color:#fff;font-weight:600;font-size:12px"><span>SKU</span><span style="text-align:right">On hand</span><span style="text-align:right">Status</span></div>
+          <div style="display:grid;grid-template-columns:1fr 60px 70px;padding:10px;border-top:1px solid #D1D5DB"><span>KUR-IND-M</span><span style="text-align:right">14</span><span style="text-align:right;font-weight:700">OK</span></div>
+          <div style="display:grid;grid-template-columns:1fr 60px 70px;padding:10px;border-top:1px solid #D1D5DB"><span>SAN-TAN-8</span><span style="text-align:right">3</span><span style="text-align:right;color:#C2570C;font-weight:700">LOW</span></div>
+        </div>
+      </div>
+      <div class="meta"><b>C · Counter</b><div class="swatches"><i style="background:#1F2937"></i><i style="background:#C2570C"></i><i style="background:#FFFFFF"></i><i style="background:#D1D5DB"></i></div>Graphite and saffron, big type, hard edges, built for touch-first POS. Excellent at the till, but heavy and tiring on catalog and report screens, where owners spend most time. Its large sizes survive as the "counter density" mode in A.</div>
+    </article>
+  </div>
+</section>
+
+<!-- ================= IDENTITY ================= -->
+<section class="s" id="identity">
+  <header><h2>Name and identity</h2><p><b>Decided 2026-10-21: the product is called TRIDENT.</b> The candidates below are kept as the record of the earlier choice. Three name candidates. <b>Tarazu</b> is recommended and used on this page as a working name. None of the three has been checked against trademarks or domains yet; that search (IP India classes 9 and 42, plus .com/.in domains) must happen before you commit. Until then the app keeps reading the name from <code class="ui-code">brand.ts</code>, so changing it is one line.</p></header>
+  <div class="names">
+    <div class="name pick"><div class="n">Tarazu <small>तराज़ू · the shopkeeper's balance scale</small></div><p>Says "fair measure" and "stock in balances stock out" in a word every Indian retailer knows. Short, ownable, easy to say on a support call.</p><span class="ui-badge ui-badge--brand">Recommended</span></div>
+    <div class="name"><div class="n">Bahi <small>बही · the red ledger book</small></div><p>Strong ledger meaning, very short. Risk: "bahi-khata" style names are already common among bookkeeping apps, so it may be hard to own.</p></div>
+    <div class="name"><div class="n">Shelfwise <small>English, descriptive</small></div><p>Travels well outside India. Generic, so harder to trademark and forgettable next to competitors.</p></div>
+  </div>
+  <div class="ui-panel"><div class="ui-panel-body row" style="gap:32px">
+    <span class="mark"><svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="8" fill="var(--brand-ink)"/><path d="M9 15h22" stroke="var(--text-on-brand)" stroke-width="2.5" stroke-linecap="round"/><path d="M20 15v15M15 30h10" stroke="var(--text-on-brand)" stroke-width="2.5" stroke-linecap="round"/><path d="M9 15l-3 7h6zM31 15l-3 7h6z" fill="var(--text-on-brand)"/><circle cx="20" cy="11" r="3" fill="var(--brand-marigold)"/></svg>TRIDENT</span>
+    <span class="mark" style="font-size:1rem"><svg width="24" height="24" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="8" fill="var(--brand-ink)"/><path d="M9 15h22M20 15v15M15 30h10" stroke="var(--text-on-brand)" stroke-width="3" stroke-linecap="round"/><circle cx="20" cy="11" r="3.5" fill="var(--brand-marigold)"/></svg>TRIDENT</span>
+    <p class="ui-muted" style="margin:0;max-width:52ch;line-height:1.6">Mark: a balance beam with a marigold pivot, drawn on a 40-unit grid with round caps. The marigold dot is the only place the accent appears in the brand, and it returns in the product as the "scanner ready" signal.</p>
+  </div></div>
+</section>
+
+<!-- ================= COLOUR ================= -->
+<section class="s" id="color">
+  <header><h2>Colour</h2><p>One brand colour, one accent, cool neutrals and four status colours. Every text pairing meets WCAG 2.2 AA (4.5:1). Status is never shown by colour alone; every badge carries a word.</p></header>
+  <div class="cols-4" id="swatches"></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Use</th><th>Token</th><th>Rule</th></tr></thead>
+    <tbody>
+      <tr><td>Primary action, links, selection</td><td class="ui-code">--brand-ink</td><td>One primary button per view. Never used for status.</td></tr>
+      <tr><td>Logo, scan-ready dot</td><td class="ui-code">--brand-marigold</td><td>Never for text or buttons; fails contrast on white.</td></tr>
+      <tr><td>Paid, in stock, synced, posted</td><td class="ui-code">--success</td><td>Only for states that are finished and correct.</td></tr>
+      <tr><td>Low stock, awaiting payment, retrying</td><td class="ui-code">--warning</td><td>Needs attention soon, nothing is broken yet.</td></tr>
+      <tr><td>Stock exception, failed sync, variance loss</td><td class="ui-code">--danger</td><td>Something needs a person now. Also destructive buttons.</td></tr>
+      <tr><td>Ready to pick, in progress, info banners</td><td class="ui-code">--info</td><td>Neutral progress. Never mixes with brand ink in one row.</td></tr>
+    </tbody></table></div>
+</section>
+
+<!-- ================= TYPE ================= -->
+<section class="s" id="type">
+  <header><h2>Typography</h2><p>IBM Plex Sans for everything, Plex Mono for SKUs, barcodes and document numbers. Plex has true tabular figures, so rupee columns line up, and a Devanagari sibling ready for a Hindi interface. Self-host the font files in production.</p></header>
+  <div class="ui-panel"><div class="ui-panel-body">
+    <div class="typerow"><code>4xl · 30/36 · 600</code><span style="font-size:var(--text-4xl);line-height:var(--lh-4xl);font-weight:600" class="ui-num">₹2,292.00</span></div>
+    <div class="typerow"><code>3xl · 24/32 · 600</code><span style="font-size:var(--text-3xl);font-weight:600" class="ui-num">₹1,23,48,920</span></div>
+    <div class="typerow"><code>2xl · 20/28 · 600</code><span class="ui-h1">Receive PO-0217</span></div>
+    <div class="typerow"><code>xl · 18/24 · 600</code><span class="ui-h2">Needs attention</span></div>
+    <div class="typerow"><code>lg · 16/24</code><span style="font-size:var(--text-lg)">Cotton Kurta · Indigo · M</span></div>
+    <div class="typerow"><code>md · 14/20</code><span>Only accepted quantity enters sellable stock. Damaged goes to non-sellable.</span></div>
+    <div class="typerow"><code>sm · 13/18</code><span style="font-size:var(--text-sm)">Table cells and helper text</span></div>
+    <div class="typerow"><code>xs · 12/16</code><span class="ui-caption">Captions, badges, correlation ids</span></div>
+    <div class="typerow"><code>mono · 13</code><span class="ui-code">KUR-IND-M · 2000000012354 · INV/26-27/0482</span></div>
+    <div class="typerow"><code>Devanagari</code><span style="font-size:var(--text-lg)">स्टॉक प्राप्त करें · ₹१,२९९</span></div>
+  </div></div>
+  <div class="dodont">
+    <div class="ui-alert ui-alert--success"><span>Do</span><div class="ui-alert-body">Format money with Indian grouping (<span class="ui-num">₹1,23,456.00</span>) via <span class="ui-code">Intl.NumberFormat('en-IN')</span>, right-aligned, tabular figures.</div></div>
+    <div class="ui-alert ui-alert--danger"><span>Don't</span><div class="ui-alert-body">Show <span class="ui-num">₹123,456</span> (western grouping) or mix decimals in one column (<span class="ui-num">899</span> above <span class="ui-num">494.10</span>).</div></div>
+  </div>
+</section>
+
+<!-- ================= SPACE ================= -->
+<section class="s" id="space">
+  <header><h2>Spacing, sizing and shape</h2><p>4 px base. Two densities: <b>office</b> (36 px controls, 40 px rows) for catalog, reports and settings, and <b>counter</b> (48 px controls, 52 px rows) for POS, receiving and picking, where people use touch screens and scanners standing up.</p></header>
+  <div class="cols">
+    <div class="ui-panel"><div class="ui-panel-body" style="display:flex;flex-direction:column;gap:10px" id="spaces"></div></div>
+    <div class="ui-panel"><div class="ui-panel-body" style="display:flex;flex-direction:column;gap:14px">
+      <div class="row"><button class="ui-btn ui-btn--sm" type="button">32 · dense</button><button class="ui-btn" type="button">36 · office</button><button class="ui-btn ui-btn--lg" type="button">48 · counter</button></div>
+      <div class="row"><span class="ui-caption">Radius 4 · controls</span><span style="width:48px;height:32px;border:1px solid var(--border-control);border-radius:var(--radius-sm)"></span><span class="ui-caption">Radius 8 · panels</span><span style="width:48px;height:32px;border:1px solid var(--border-control);border-radius:var(--radius-md)"></span></div>
+      <div class="row"><span class="ui-caption">Shadow only on things that float (menus, dialogs, toasts). Panels use a 1 px border, no shadow.</span></div>
+      <div class="ui-menu" role="menu" aria-label="Example menu" style="width:200px"><div role="menuitem" tabindex="-1">Adjust stock</div><div role="menuitem" tabindex="-1">Transfer</div><div role="menuitem" tabindex="-1">Print labels</div></div>
+    </div></div>
+  </div>
+</section>
+
+<!-- ================= COMPONENTS ================= -->
+<section class="s" id="components">
+  <header><h2>Components</h2><p>Every component below is live HTML using <code class="ui-code">components.css</code>. React components in <code class="ui-code">apps/web</code> render these same class names, so there is one source of styling.</p></header>
+
+  <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Buttons</span></div><div class="ui-panel-body specimen">
+    <div class="row"><button class="ui-btn ui-btn--primary" type="button">Post receipt</button><button class="ui-btn" type="button">Save draft</button><button class="ui-btn ui-btn--ghost" type="button">Print labels</button><button class="ui-btn ui-btn--danger" type="button">Void invoice</button><button class="ui-btn ui-btn--primary" type="button" aria-busy="true">Saving</button><button class="ui-btn" type="button" disabled>Disabled</button></div>
+    <p class="ui-caption" style="margin:0">Labels say exactly what happens ("Post receipt", not "Submit"). One primary per view. Destructive actions are outlined red and always confirm in a dialog that names the consequence.</p>
+  </div></div>
+
+  <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Form fields</span></div><div class="ui-panel-body">
+    <div class="ui-form-grid">
+      <div class="ui-field"><label class="ui-label" for="f-name">Product name<span class="ui-req" aria-hidden="true">*</span></label><input class="ui-input" id="f-name" value="Cotton Kurta" required></div>
+      <div class="ui-field"><label class="ui-label" for="f-sku">SKU<span class="ui-req" aria-hidden="true">*</span></label><input class="ui-input ui-code" id="f-sku" value="KUR-IND-M" aria-invalid="true" aria-describedby="f-sku-e"><span class="ui-error" id="f-sku-e">SKU already used by Cotton Kurta · L. Use a different SKU.</span></div>
+      <div class="ui-field"><label class="ui-label" for="f-price">Selling price</label><div class="ui-input-group"><span class="ui-addon">₹</span><input class="ui-input ui-input--num" id="f-price" value="899.00" inputmode="decimal"></div><span class="ui-help">Includes GST (store setting)</span></div>
+      <div class="ui-field"><label class="ui-label" for="f-gst">GST rate</label><select class="ui-select" id="f-gst"><option>0%</option><option selected>5%</option><option>18%</option><option>40%</option></select></div>
+      <div class="ui-field"><label class="ui-label" for="f-hsn">HSN code</label><input class="ui-input ui-code" id="f-hsn" value="62114200" inputmode="numeric"></div>
+      <div class="ui-field"><span class="ui-label" id="f-qty-l">Quantity</span><div class="ui-stepper" role="group" aria-labelledby="f-qty-l"><button type="button" aria-label="Decrease">−</button><input id="f-qty" value="2" inputmode="decimal" aria-labelledby="f-qty-l"><button type="button" aria-label="Increase">+</button></div></div>
+      <div class="ui-field ui-span-all"><label class="ui-label" for="f-note">Reason for adjustment<span class="ui-req" aria-hidden="true">*</span></label><textarea class="ui-textarea" id="f-note">Stitching torn at hem</textarea></div>
+      <div class="ui-field"><label class="ui-check" for="f-pub"><input type="checkbox" id="f-pub" checked> Publish to website</label></div>
+      <div class="ui-field"><label class="ui-check" for="f-neg"><input type="checkbox" id="f-neg"> Allow below zero (owner only)</label></div>
+    </div>
+    <div class="ui-form-footer"><button class="ui-btn" type="button">Cancel</button><button class="ui-btn ui-btn--primary" type="button">Save product</button></div>
+  </div></div>
+
+  <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Scan field</span><span class="ui-caption">counter screens: POS, receiving, stocktake, picking</span></div><div class="ui-panel-body specimen">
+    <label class="ui-scan" for="f-scan"><span class="ui-scan-dot" aria-hidden="true"></span><span class="ui-sr-only">Scan or search</span><input id="f-scan" placeholder="Scan barcode or type name / SKU" autocomplete="off"><span class="ui-kbd">F2</span></label>
+    <label class="ui-scan" data-state="error" for="f-scan2"><span class="ui-scan-dot" aria-hidden="true" style="background:var(--danger)"></span><span class="ui-sr-only">Scan</span><input id="f-scan2" value="8906011234567"><span class="ui-badge ui-badge--danger">Not in catalog</span></label>
+    <p class="ui-caption" style="margin:0">Keeps focus after every scan. Success: green border plus a short beep. Error: red border, shake (off with reduced motion), and the reason read out by a live region.</p>
+  </div></div>
+
+  <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Status badges</span></div><div class="ui-panel-body specimen">
+    <div class="row"><span class="ui-badge ui-badge--success">Paid</span><span class="ui-badge ui-badge--success">Synced</span><span class="ui-badge ui-badge--warning">Awaiting payment</span><span class="ui-badge ui-badge--warning">Low stock</span><span class="ui-badge ui-badge--danger">Stock exception</span><span class="ui-badge ui-badge--danger">Sync failed</span><span class="ui-badge ui-badge--info">Ready to pick</span><span class="ui-badge">Draft</span><span class="ui-badge ui-badge--brand">Website update pending</span><span class="ui-count">3</span></div>
+    <div class="tbl"><table><thead><tr><th>Domain</th><th>Value → badge</th></tr></thead><tbody>
+      <tr><td>Order</td><td>awaiting_payment, on_hold → warning · paid, completed → success · ready_to_pick, picking, packed → info · stock_exception, failed → danger · cancelled, refunded → neutral</td></tr>
+      <tr><td>Publish / sync</td><td>synced → success · queued, retrying → warning · failed, dead, needs_review → danger · not_published → neutral</td></tr>
+      <tr><td>Documents</td><td>posted → success · draft → neutral · voided_by_reversal → danger</td></tr>
+      <tr><td>Stock</td><td>available &gt; reorder → none · ≤ reorder → warning "Low" · 0 → danger "Out"</td></tr>
+    </tbody></table></div>
+  </div></div>
+
+  <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Data table</span><div class="ui-actions"><div class="ui-segmented" role="group" aria-label="Density"><button type="button" aria-pressed="true">Office</button><button type="button" aria-pressed="false">Counter</button></div></div></div>
+    <div class="ui-toolbar"><input class="ui-input ui-search" placeholder="Search name, SKU or scan" aria-label="Search products"><button class="ui-chip" type="button" aria-pressed="true">Status: Active</button><button class="ui-chip" type="button" aria-pressed="false">+ Category</button><button class="ui-chip" type="button" aria-pressed="false">+ Website</button></div>
+    <div class="ui-bulkbar">2 selected<button class="ui-btn ui-btn--sm" type="button">Print labels</button><button class="ui-btn ui-btn--sm" type="button">Publish</button><button class="ui-btn ui-btn--sm ui-btn--ghost" type="button">Clear</button></div>
+    <div class="ui-table-wrap"><table class="ui-table" data-collapse>
+      <thead><tr><th scope="col"><span class="ui-sr-only">Select</span></th><th scope="col" aria-sort="ascending"><button type="button">Product ▲</button></th><th scope="col">SKU</th><th scope="col" class="ui-num">Price</th><th scope="col" class="ui-qty">Available</th><th scope="col">Website</th></tr></thead>
+      <tbody>
+        <tr aria-selected="true"><td data-label="Select"><label class="ui-check"><input type="checkbox" checked aria-label="Select Cotton Kurta"></label></td><td data-primary><div style="display:flex;gap:10px;align-items:center"><span class="ui-thumb"></span><div><div class="ui-cell-title">Cotton Kurta</div><div class="ui-cell-sub">4 variants · Sutra Handloom</div></div></div></td><td data-label="SKU" class="ui-code">KUR-IND-*</td><td data-label="Price" class="ui-money">₹899 – ₹999</td><td data-label="Available" class="ui-qty">38</td><td data-label="Website"><span class="ui-badge ui-badge--success">Synced</span></td></tr>
+        <tr aria-selected="true" data-tone="warning"><td data-label="Select"><label class="ui-check"><input type="checkbox" checked aria-label="Select Leather Sandal"></label></td><td data-primary><div style="display:flex;gap:10px;align-items:center"><span class="ui-thumb"></span><div><div class="ui-cell-title">Leather Sandal</div><div class="ui-cell-sub">6 variants · Kolhapuri Co.</div></div></div></td><td data-label="SKU" class="ui-code">SAN-TAN-*</td><td data-label="Price" class="ui-money">₹1,299</td><td data-label="Available" class="ui-qty">4 <span class="ui-badge ui-badge--warning">Low</span></td><td data-label="Website"><span class="ui-badge ui-badge--success">Synced</span></td></tr>
+        <tr data-tone="danger"><td data-label="Select"><label class="ui-check"><input type="checkbox" aria-label="Select Silk Dupatta"></label></td><td data-primary><div style="display:flex;gap:10px;align-items:center"><span class="ui-thumb"></span><div><div class="ui-cell-title">Silk Dupatta</div><div class="ui-cell-sub">3 variants</div></div></div></td><td data-label="SKU" class="ui-code">DUP-SLK-*</td><td data-label="Price" class="ui-money">₹1,450</td><td data-label="Available" class="ui-qty">17</td><td data-label="Website"><span class="ui-badge ui-badge--danger">Sync failed</span></td></tr>
+      </tbody></table></div>
+    <div class="ui-pager"><span>Showing 1–25</span><div class="row"><button class="ui-btn ui-btn--sm" type="button" disabled>Previous</button><button class="ui-btn ui-btn--sm" type="button">Next</button></div></div>
+  </div>
+  <p class="ui-caption" style="margin:0">Numbers right-aligned with tabular figures; text left. Header sticks while scrolling. Row tone stripe for rows needing attention. Cursor pagination (Previous/Next), matching the API. Below 768 px the table becomes stacked cards (resize this page to see it).</p>
+
+  <div class="cols">
+    <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">KPI tiles</span></div><div class="ui-panel-body cols" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+      <div class="ui-kpi" style="padding:0"><span class="ui-caption">Sales today</span><span class="ui-kpi-value">₹48,920</span><span class="ui-kpi-delta" data-dir="up">▲ 12% vs yesterday</span></div>
+      <div class="ui-kpi" style="padding:0"><span class="ui-caption">Low stock</span><span class="ui-kpi-value">23</span><span class="ui-kpi-delta" style="color:var(--warning)">below reorder level</span></div>
+    </div></div>
+    <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Tabs, segmented, steps</span></div><div class="ui-panel-body specimen">
+      <div class="ui-tabs" role="tablist"><button class="ui-tab" role="tab" aria-selected="true" type="button">Details</button><button class="ui-tab" role="tab" aria-selected="false" type="button">Variants</button><button class="ui-tab" role="tab" aria-selected="false" type="button">Images</button><button class="ui-tab" role="tab" aria-selected="false" type="button">History</button></div>
+      <ol class="ui-steps"><li data-n="1" data-done>Pick</li><li data-n="2" aria-current="step">Pack</li><li data-n="3">Dispatch</li></ol>
+      <div class="ui-progress" role="progressbar" aria-valuenow="64" aria-valuemin="0" aria-valuemax="100" aria-label="Count progress"><span style="width:64%"></span></div><span class="ui-caption">136 of 212 lines counted</span>
+    </div></div>
+  </div>
+
+  <div class="cols">
+    <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Alerts</span></div><div class="ui-panel-body specimen">
+      <div class="ui-alert ui-alert--danger" role="alert"><span>Stock exception</span><div class="ui-alert-body">Leather Sandal · 8 needs 2, only 1 available at Shop floor.</div><div class="ui-actions"><button class="ui-btn ui-btn--sm" type="button">Retry</button></div></div>
+      <div class="ui-alert ui-alert--warning"><span>Website update pending</span><div class="ui-alert-body">Dispatched in ERP. Retrying the website in 32 s.</div></div>
+      <div class="ui-alert ui-alert--info"><span>Blind count</span><div class="ui-alert-body">Expected quantities stay hidden until you submit.</div></div>
+    </div></div>
+    <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Dialog &amp; toast</span></div><div class="ui-panel-body specimen">
+      <div class="demo-dialog"><div class="ui-dialog" role="dialog" aria-modal="false" aria-labelledby="dlg-t">
+        <div class="ui-dialog-head"><span class="ui-h3" id="dlg-t">Void invoice INV/26-27/0482?</span></div>
+        <div class="ui-dialog-body"><p style="margin:0;color:var(--text-2)">A credit note for ₹2,292.00 will be issued. The invoice stays on record and cannot be edited.</p><label class="ui-check" for="dlg-rs"><input type="checkbox" id="dlg-rs" checked> Put items back into stock</label></div>
+        <div class="ui-dialog-foot"><button class="ui-btn" type="button">Keep invoice</button><button class="ui-btn ui-btn--danger" type="button">Void and issue credit note</button></div>
+      </div></div>
+      <div class="ui-toast" role="status" style="position:static">Receipt GRN-0092 posted · 17 units in<button type="button">View</button></div>
+    </div></div>
+  </div>
+</section>
+
+<!-- ================= STATES ================= -->
+<section class="s" id="states">
+  <header><h2>Empty, loading and error states</h2><p>Every list and panel has all three. Errors show the correlation id so support can trace them.</p></header>
+  <div class="cols">
+    <div class="ui-panel"><div class="ui-empty"><span class="ui-h3">No products yet</span><span>Add your first product or import your catalog from a spreadsheet.</span><div class="ui-actions"><button class="ui-btn" type="button">Import CSV</button><button class="ui-btn ui-btn--primary" type="button">Add product</button></div></div></div>
+    <div class="ui-panel"><div class="ui-panel-body" style="display:flex;flex-direction:column;gap:14px" aria-busy="true" aria-label="Loading products">
+      <span class="ui-skeleton" style="width:40%"></span><span class="ui-skeleton"></span><span class="ui-skeleton" style="width:85%"></span><span class="ui-skeleton" style="width:70%"></span><span class="ui-skeleton" style="width:90%"></span></div></div>
+    <div class="ui-panel"><div class="ui-empty"><span class="ui-h3">Couldn't load stock</span><span>The server didn't respond. Your data is safe; nothing was changed.</span><div class="ui-actions"><button class="ui-btn ui-btn--primary" type="button">Try again</button></div><span class="ui-correlation">Ref c0a8f2e1-9b7d</span></div></div>
+  </div>
+</section>
+
+<!-- ================= RESPONSIVE ================= -->
+<section class="s" id="responsive">
+  <header><h2>Responsive behaviour</h2><p>Desktop-first, usable on tablet and phone (PRD 2.2, AC-19). The counter screens are designed for a 10-inch tablet in landscape.</p></header>
+  <div class="tbl"><table>
+    <thead><tr><th>Width</th><th>Shell</th><th>Tables</th><th>Forms</th><th>Counter screens</th></tr></thead>
+    <tbody>
+      <tr><td>≥ 1280 px desktop</td><td>Full sidebar 232 px</td><td>All columns, sticky header</td><td>Multi-column grid</td><td>Cart + bill side by side</td></tr>
+      <tr><td>1024–1279 tablet landscape</td><td>Icon sidebar 64 px</td><td>Hide low-priority columns (category, brand)</td><td>2 columns</td><td>Same as desktop, counter density</td></tr>
+      <tr><td>768–1023 tablet portrait</td><td>Icon sidebar</td><td>Horizontal scroll inside the table</td><td>2 columns</td><td>Bill drops below cart, sticky Pay bar</td></tr>
+      <tr><td>&lt; 768 phone</td><td>Drawer from top-bar menu</td><td>Stacked cards (<span class="ui-code">data-collapse</span>)</td><td>1 column, sticky footer actions</td><td>Pick list and stock lookup only; POS not supported on phone in V1</td></tr>
+    </tbody></table></div>
+  <div class="rules">
+    <div class="rule"><h3>Rules</h3><ul><li>The page body never scrolls sideways; only a table container may.</li><li>Primary action stays visible: sticky footer on phones, top-right on desktop.</li><li>Touch devices (<span class="ui-code">pointer: coarse</span>) get 44 px minimum controls automatically.</li><li>Charts are capped at two on the dashboard; on phones they become a single number with a sparkline.</li></ul></div>
+    <div class="rule"><h3>Column priority (tables)</h3><ul><li><b>Always:</b> identity (name/number), status, the one number the screen is about.</li><li><b>Tablet hides:</b> category, brand, created-by, secondary dates.</li><li><b>Phone:</b> card shows title, status badge, two key values; tap opens detail.</li></ul></div>
+  </div>
+</section>
+
+<!-- ================= A11Y ================= -->
+<section class="s" id="a11y">
+  <header><h2>Accessibility requirements</h2><p>Target WCAG 2.2 level AA. These are acceptance criteria for every screen built from B2 on, checked with axe in CI and by a keyboard-only pass before each stage closes.</p></header>
+  <div class="rules">
+    <div class="rule"><h3>Perceivable</h3><ul><li>Text contrast ≥ 4.5:1, controls and focus ≥ 3:1 (tokens already meet this).</li><li>Status never by colour alone: badge text, row stripe plus a word.</li><li>Images have alt text from the product's alt field; decorative thumbs use empty alt.</li><li>Text resizes to 200% without loss; layout reflows at 320 px.</li></ul></div>
+    <div class="rule"><h3>Operable</h3><ul><li>Every action reachable by keyboard; visible 2 px focus ring on all controls.</li><li>Skip link to main content; logical tab order; no keyboard traps in dialogs (focus returns to the trigger).</li><li>POS shortcuts: <span class="ui-kbd">F2</span> scan/search, <span class="ui-kbd">F4</span> customer, <span class="ui-kbd">F8</span> discount, <span class="ui-kbd">F9</span> pay, <span class="ui-kbd">Esc</span> cancel. Shortcuts shown on the buttons.</li><li>Touch targets ≥ 24 px everywhere (WCAG 2.5.8), ≥ 44 px on counter screens.</li><li>Motion is decorative only and stops under reduced-motion.</li></ul></div>
+    <div class="rule"><h3>Understandable</h3><ul><li>Every input has a visible label; required marked with * and in the label text for screen readers.</li><li>Errors say what is wrong and how to fix it, sit under the field, and are linked with <span class="ui-code">aria-describedby</span>; a summary at the top on submit.</li><li>Destructive actions confirm with a dialog that names the object and the consequence.</li><li><span class="ui-code">lang="en-IN"</span> on the document; Hindi strings get <span class="ui-code">lang="hi"</span>.</li></ul></div>
+    <div class="rule"><h3>Robust</h3><ul><li>Native elements first (button, select, table, dialog). ARIA only where HTML has no equivalent (tabs, live regions).</li><li>Scan results, toasts and POS totals update an <span class="ui-code">aria-live="polite"</span> region; errors use <span class="ui-code">role="alert"</span>.</li><li>Tables use <span class="ui-code">th scope</span> and <span class="ui-code">aria-sort</span>.</li><li>Tested with NVDA + Chrome and VoiceOver + Safari before launch (B7).</li></ul></div>
+  </div>
+</section>
+
+</div>
+</div>
+
+<script>
+(function(){
+  var sw=[['--brand-ink','Brand ink','7.9:1'],['--brand-ink-soft','Ink soft','selection'],['--brand-marigold','Marigold','logo only'],['--text','Text','16.1:1'],['--text-2','Text 2','7.8:1'],['--text-3','Text 3','5.4:1'],['--bg','Background',''],['--surface-sunken','Sunken',''],['--border','Border',''],['--border-control','Control border','3.1:1'],['--success','Success','6.0:1'],['--warning','Warning','6.3:1'],['--danger','Danger','6.6:1'],['--info','Info','6.3:1']];
+  var cs=getComputedStyle(document.documentElement), out='';
+  sw.forEach(function(s){out+='<div class="sw"><div class="chip" style="background:var('+s[0]+')"></div><div class="t"><b>'+s[1]+'</b><span>'+s[0]+' '+cs.getPropertyValue(s[0]).trim()+'</span><span>'+s[2]+'</span></div></div>'});
+  document.getElementById('swatches').innerHTML=out;
+  var sp=[1,2,3,4,5,6,8,10,12], o2='';
+  sp.forEach(function(n){var v=cs.getPropertyValue('--space-'+n).trim();o2+='<div class="spacebar"><code>--space-'+n+'</code><i style="width:'+v+'"></i><span>'+v+'</span></div>'});
+  document.getElementById('spaces').innerHTML=o2;
+  document.querySelectorAll('.ui-segmented button').forEach(function(b){b.addEventListener('click',function(){b.parentNode.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x===b)});var t=document.querySelector('.ui-table');t.classList.toggle('ui-table--touch',b.textContent==='Counter')})});
+  document.querySelectorAll('.ui-tabs').forEach(function(g){g.addEventListener('click',function(e){var t=e.target.closest('.ui-tab');if(!t)return;g.querySelectorAll('.ui-tab').forEach(function(x){x.setAttribute('aria-selected',x===t)})})});
+  document.querySelectorAll('.ui-chip').forEach(function(c){c.addEventListener('click',function(){c.setAttribute('aria-pressed',c.getAttribute('aria-pressed')!=='true')})});
+})();
+</script>

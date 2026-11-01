@@ -1,0 +1,31 @@
+{
+  "productName": "TRIDENT",
+  "tagline": "Counter, stock and your WooCommerce shop in one place",
+  "domain": "",
+  "appUrl": "",
+  "signupUrl": "",
+  "loginUrl": "",
+  "supportEmail": "",
+  "whatsappNumber": "",
+  "whatsappDisplay": "",
+  "legalName": "",
+  "legalForm": "",
+  "addressLine1": "",
+  "addressLine2": "",
+  "city": "",
+  "state": "",
+  "pin": "",
+  "gstin": "",
+  "grievanceOfficerName": "",
+  "grievanceEmail": "",
+  "effectiveDate": "",
+  "jurisdictionCity": "",
+  "trialDays": 30,
+  "gstNote": "Prices do not include GST.",
+  "annualRefund": "If you cancel an annual plan within its first 30 days, we refund the unused whole months. After that, annual plans are not refunded.",
+  "lawyerReviewed": false,
+  "plans": {
+    "store": { "name": "Store", "priceMonth": 999, "priceYear": 9999, "users": 3 },
+    "online": { "name": "Store + Online", "priceMonth": 1999, "priceYear": 19999, "users": 5 }
+  }
+}

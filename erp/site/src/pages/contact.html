@@ -1,0 +1,22 @@
+<!-- title: Contact; description: How to reach us: email, WhatsApp, postal address and grievance officer. -->
+<h1>Contact</h1>
+<div class="grid">
+  <div class="card">
+    <h2>Support</h2>
+    <p>Email: <a href="mailto:{{supportEmail}}">{{supportEmail}}</a></p>
+    <p>WhatsApp: <a href="{{whatsappLink}}">{{whatsappDisplay}}</a></p>
+    <p class="muted">We answer on working days. Signed-in store owners can also find these on their Account page.</p>
+  </div>
+  <div class="card">
+    <h2>Business details</h2>
+    <p>{{legalName}}<br>{{legalForm}}</p>
+    <address>{{addressLine1}}<br>{{#if addressLine2}}{{addressLine2}}<br>{{/if}}{{city}}, {{state}} {{pin}}<br>India</address>
+    {{#if gstin}}<p>GSTIN: {{gstin}}</p>{{/if}}
+  </div>
+  <div class="card">
+    <h2>Grievance officer</h2>
+    <p>Under the Information Technology Act, 2000 and the rules made under it, complaints about this service or how we handle personal data can be sent to:</p>
+    <p>{{grievanceOfficerName}}<br><a href="mailto:{{grievanceEmail}}">{{grievanceEmail}}</a></p>
+    <p class="muted">We acknowledge complaints within 24 hours and aim to resolve them within 15 days.</p>
+  </div>
+</div>

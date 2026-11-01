@@ -1,0 +1,13 @@
+{
+  "name": "erp",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev:api": "npm run dev -w apps/api",
+    "dev:web": "npm run dev -w apps/web",
+    "build": "npm run build -ws",
+    "typecheck": "npm run typecheck -ws",
+    "test": "npm test -w apps/api"
+  }
+}

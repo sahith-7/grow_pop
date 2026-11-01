@@ -1,0 +1,7 @@
+{
+  "name": "e2e",
+  "private": true,
+  "description": "Browser tests (B7b). Not part of the npm workspaces; install and run from this folder.",
+  "scripts": { "test": "playwright test" },
+  "devDependencies": { "@playwright/test": "1.56.1" }
+}

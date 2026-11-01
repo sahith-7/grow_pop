@@ -1,0 +1,22 @@
+<!-- title: Book a demo; description: Tell us about your shop and we will show you the software on a call or WhatsApp video. -->
+<h1>Book a demo</h1>
+<p class="lead">Tell us about your shop. We will call or WhatsApp you to find a time and show you the software with products like yours.</p>
+<p class="notice">This form doesn't send anything to us by itself. When you press the button, it opens WhatsApp (or your email) with your details filled in, and you send the message yourself. This website stores nothing.</p>
+
+<form id="demo-form" class="form" data-whatsapp="{{whatsappNumber}}" data-email="{{supportEmail}}" novalidate>
+  <label>Your name <input name="name" autocomplete="name" required maxlength="80"></label>
+  <label>Phone (WhatsApp) <input name="phone" type="tel" autocomplete="tel" required inputmode="tel" pattern="[0-9+ ]{10,16}" maxlength="16"></label>
+  <label>Business name <input name="business" autocomplete="organization" required maxlength="100"></label>
+  <label>City <input name="city" autocomplete="address-level2" required maxlength="60"></label>
+  <label>What do you sell? <span class="opt">(optional)</span> <input name="sells" maxlength="120" placeholder="e.g. sarees, footwear, mobile accessories"></label>
+  <label>Anything else? <span class="opt">(optional)</span> <textarea name="message" maxlength="600"></textarea></label>
+  <button class="btn" type="submit">Continue on WhatsApp</button>
+</form>
+
+<div id="demo-result" class="form-result notice" tabindex="-1" hidden>
+  <p><strong>Your message is ready.</strong> If WhatsApp didn't open, use one of these:</p>
+  <p><a id="demo-wa" class="btn" href="#" target="_blank" rel="noopener">Open WhatsApp</a> <a id="demo-mail" class="btn btn-ghost" href="#">Send by email instead</a></p>
+</div>
+
+<p class="prose">Prefer to call or write? WhatsApp {{whatsappDisplay}} or email <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p>
+<script src="assets/demo.js" defer></script>

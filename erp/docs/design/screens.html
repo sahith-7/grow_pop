@@ -1,0 +1,629 @@
+<title>TRIDENT Screen Designs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* ==========================================================================
+   Retail ERP design tokens (Phase 2 visual language, direction A "Ledger")
+   The ONLY file that holds raw colour, font and size values.
+   Components and screens use var(--token) and never literals.
+   Rebrand = edit this file (and brand.ts). Contrast ratios in comments are
+   against --surface (#fff) unless noted; all meet WCAG 2.2 AA.
+   ========================================================================== */
+
+:root {
+  /* ---- Brand ---------------------------------------------------------- */
+  --brand-ink:        #2F45B8;  /* primary actions, links, selection     7.9:1 */
+  --brand-ink-hover:  #24379A;  /*                                       10.1:1 */
+  --brand-ink-soft:   #ECEFFB;  /* selected row, active nav background         */
+  --brand-marigold:   #E8A317;  /* logo mark + scan-ready pulse ONLY, never text on white */
+
+  /* ---- Neutrals (cool, biased toward the brand blue) ------------------ */
+  --bg:               #F6F7F9;  /* app background                               */
+  --surface:          #FFFFFF;  /* panels, tables, inputs                       */
+  --surface-sunken:   #EEF0F4;  /* table header, read-only fields, code         */
+  --border:           #DDE1E8;  /* dividers, panel outlines (decorative)        */
+  --border-control:   #8A93A3;  /* input/checkbox outlines                3.1:1 */
+  --text:             #161B26;  /* body                          16.1:1 on --bg */
+  --text-2:           #4A5363;  /* secondary                                7.8:1 */
+  --text-3:           #626B7D;  /* captions, placeholders                   5.4:1 */
+  --text-on-brand:    #FFFFFF;
+
+  /* ---- Status (never the only signal: always paired with text/icon) --- */
+  --success:          #13723A;  --success-soft: #E8F5EC;   /* 6.0 / 5.4 on soft */
+  --warning:          #8A5300;  --warning-soft: #FDF3E1;   /* 6.3 / 5.8 */
+  --danger:           #B42318;  --danger-soft:  #FDECEA;   /* 6.6 / 5.8 */
+  --info:             #0B6690;  --info-soft:    #E6F3F9;   /* 6.3 / 5.6 */
+  --neutral-badge:    #4A5363;  --neutral-soft: #EEF0F4;
+
+  /* ---- Typography ------------------------------------------------------ */
+  /* IBM Plex: true tabular figures, a Devanagari sibling for Hindi later,
+     open licence. Self-host the woff2 files in production (no third-party
+     font CDN: CSP + privacy + offline-tolerant counters).                  */
+  --font-sans: 'IBM Plex Sans', 'IBM Plex Sans Devanagari', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* scale (px): 12 13 14 16 18 20 24 30 */
+  --text-xs: 0.75rem;   --lh-xs: 1rem;      /* captions, badges           */
+  --text-sm: 0.8125rem; --lh-sm: 1.125rem;  /* table cells, helper text   */
+  --text-md: 0.875rem;  --lh-md: 1.25rem;   /* body, inputs (default)     */
+  --text-lg: 1rem;      --lh-lg: 1.5rem;    /* section titles, POS lines  */
+  --text-xl: 1.125rem;  --lh-xl: 1.5rem;    /* panel titles               */
+  --text-2xl: 1.25rem;  --lh-2xl: 1.75rem;  /* page titles                */
+  --text-3xl: 1.5rem;   --lh-3xl: 2rem;     /* KPI values                 */
+  --text-4xl: 1.875rem; --lh-4xl: 2.25rem;  /* POS total                  */
+  --weight-regular: 400; --weight-medium: 500; --weight-semibold: 600;
+
+  /* ---- Spacing (4 px base) --------------------------------------------- */
+  --space-0: 0;     --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px;  --space-5: 20px; --space-6: 24px; --space-8: 32px;
+  --space-10: 40px; --space-12: 48px;
+
+  /* ---- Sizing ----------------------------------------------------------- */
+  --control-h-sm: 32px;   /* dense toolbars                                 */
+  --control-h:    36px;   /* default buttons/inputs (desktop)               */
+  --control-h-lg: 48px;   /* POS, pick screens, touch (>= 44px target)      */
+  --row-h:        40px;   /* table row, compact                             */
+  --row-h-touch:  52px;   /* table row on counter screens                   */
+  --sidebar-w:    232px;  --sidebar-w-collapsed: 64px;  --topbar-h: 56px;
+  --content-max:  1440px;
+
+  /* ---- Shape & depth ---------------------------------------------------- */
+  --radius-sm: 4px;   /* inputs, badges, buttons */
+  --radius-md: 8px;   /* panels, dialogs         */
+  --radius-pill: 999px;
+  --shadow-overlay: 0 8px 24px rgba(22, 27, 38, .16), 0 2px 6px rgba(22, 27, 38, .08); /* menus, dialogs, toasts only */
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--brand-ink);
+
+  /* ---- Motion ----------------------------------------------------------- */
+  --ease: cubic-bezier(.2, 0, 0, 1);
+  --dur-fast: 120ms;  --dur: 200ms;
+
+  /* ---- Layers ----------------------------------------------------------- */
+  --z-sticky: 10; --z-drawer: 40; --z-overlay: 50; --z-toast: 60;
+
+  color-scheme: light;
+}
+
+/* Dark theme: defined so the tokens are proven theme-safe; NOT enabled in V1.
+   Opt-in by setting data-theme="dark" on <html> once every screen is checked. */
+:root[data-theme="dark"] {
+  --brand-ink: #8EA0FF;  --brand-ink-hover: #A9B7FF;  --brand-ink-soft: #232B4D;
+  --bg: #12151C;  --surface: #1A1E27;  --surface-sunken: #222733;
+  --border: #2E3442;  --border-control: #6B7385;
+  --text: #E7EAF0;  --text-2: #A9B1C0;  --text-3: #8C94A5;  --text-on-brand: #12151C;
+  --success: #5CC98A; --success-soft: #16301F;
+  --warning: #F0B455; --warning-soft: #33270F;
+  --danger:  #FF8A80; --danger-soft:  #3A1A18;
+  --info:    #6CC3EC; --info-soft:    #10293A;
+  --neutral-badge: #A9B1C0; --neutral-soft: #222733;
+  --shadow-overlay: 0 8px 24px rgba(0,0,0,.5);
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
+}
+
+/* ==========================================================================
+   Retail ERP components (Phase 2, visual language). Depends on tokens.css.
+   Framework-agnostic: React components in apps/web render these class names.
+   All classes are prefixed ui- so they cannot collide with Phase 1 styles.
+   ========================================================================== */
+
+/* ---- Base --------------------------------------------------------------- */
+.ui-root, .ui-root * { box-sizing: border-box; }
+.ui-root {
+  font-family: var(--font-sans); font-size: var(--text-md); line-height: var(--lh-md);
+  color: var(--text); background: var(--bg);
+  font-feature-settings: 'tnum' 0; -webkit-font-smoothing: antialiased;
+}
+.ui-root :focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-sm); }
+.ui-num, .ui-money, .ui-qty { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ui-code { font-family: var(--font-mono); font-size: var(--text-sm); letter-spacing: 0; }
+.ui-muted { color: var(--text-2); }
+.ui-caption { font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--text-3); }
+.ui-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ui-h1 { font-size: var(--text-2xl); line-height: var(--lh-2xl); font-weight: var(--weight-semibold); margin: 0; text-wrap: balance; }
+.ui-h2 { font-size: var(--text-xl); line-height: var(--lh-xl); font-weight: var(--weight-semibold); margin: 0; }
+.ui-h3 { font-size: var(--text-lg); line-height: var(--lh-lg); font-weight: var(--weight-semibold); margin: 0; }
+.ui-eyebrow { font-size: var(--text-xs); line-height: var(--lh-xs); font-weight: var(--weight-semibold); letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+
+/* ---- App shell ---------------------------------------------------------- */
+.ui-shell { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); min-height: 100%; }
+.ui-sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: var(--space-4) var(--space-3); display: flex; flex-direction: column; gap: var(--space-5); position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.ui-brand { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-2); font-weight: var(--weight-semibold); font-size: var(--text-lg); }
+.ui-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.ui-nav-group > .ui-eyebrow { padding: 0 var(--space-2) var(--space-1); }
+.ui-nav-link { display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-h-sm); padding: 0 var(--space-2); border-radius: var(--radius-sm); color: var(--text); text-decoration: none; font-size: var(--text-md); }
+.ui-nav-link:hover { background: var(--surface-sunken); }
+.ui-nav-link[aria-current="page"] { background: var(--brand-ink-soft); color: var(--brand-ink); font-weight: var(--weight-semibold); }
+.ui-nav-link .ui-count { margin-left: auto; }
+.ui-topbar { height: var(--topbar-h); display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-6); border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: var(--z-sticky); }
+.ui-main { min-width: 0; display: flex; flex-direction: column; }
+.ui-content { width: 100%; max-width: var(--content-max); padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); }
+.ui-page-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.ui-page-header .ui-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ui-shell--focus { grid-template-columns: minmax(0, 1fr); }      /* POS, pick: no sidebar */
+.ui-shell--focus .ui-sidebar { display: none; }
+
+/* ---- Buttons ------------------------------------------------------------ */
+.ui-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: var(--control-h); padding: 0 var(--space-4); border-radius: var(--radius-sm); border: 1px solid var(--border-control); background: var(--surface); color: var(--text); font: inherit; font-weight: var(--weight-medium); white-space: nowrap; cursor: pointer; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.ui-btn:hover { background: var(--surface-sunken); }
+.ui-btn--primary { background: var(--brand-ink); border-color: var(--brand-ink); color: var(--text-on-brand); }
+.ui-btn--primary:hover { background: var(--brand-ink-hover); border-color: var(--brand-ink-hover); }
+.ui-btn--danger { background: var(--surface); border-color: var(--danger); color: var(--danger); }
+.ui-btn--danger:hover { background: var(--danger-soft); }
+.ui-btn--ghost { border-color: transparent; background: transparent; color: var(--brand-ink); }
+.ui-btn--ghost:hover { background: var(--brand-ink-soft); }
+.ui-btn--sm { height: var(--control-h-sm); padding: 0 var(--space-3); font-size: var(--text-sm); }
+.ui-btn--lg { height: var(--control-h-lg); padding: 0 var(--space-5); font-size: var(--text-lg); }
+.ui-btn--block { width: 100%; }
+.ui-btn--icon { width: var(--control-h); padding: 0; }
+.ui-btn[disabled], .ui-btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+.ui-btn[aria-busy="true"] { position: relative; color: transparent; pointer-events: none; }
+.ui-btn[aria-busy="true"]::after { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-color: var(--text-3) transparent var(--text-3) var(--text-3); animation: ui-spin .7s linear infinite; }
+.ui-btn--primary[aria-busy="true"]::after { border-color: var(--text-on-brand) transparent var(--text-on-brand) var(--text-on-brand); }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+
+/* ---- Form fields -------------------------------------------------------- */
+.ui-field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.ui-label { font-size: var(--text-sm); line-height: var(--lh-sm); font-weight: var(--weight-medium); color: var(--text); }
+.ui-label .ui-req { color: var(--danger); margin-left: 2px; }
+.ui-help { font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--text-3); }
+.ui-error { font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--danger); display: flex; gap: var(--space-1); }
+.ui-input, .ui-select, .ui-textarea { width: 100%; height: var(--control-h); padding: 0 var(--space-3); border: 1px solid var(--border-control); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: inherit; }
+.ui-textarea { height: auto; min-height: 88px; padding: var(--space-2) var(--space-3); resize: vertical; }
+.ui-input::placeholder { color: var(--text-3); }
+.ui-input[aria-invalid="true"], .ui-select[aria-invalid="true"] { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
+.ui-input[readonly] { background: var(--surface-sunken); }
+.ui-input--num { text-align: right; font-variant-numeric: tabular-nums; }
+.ui-input-group { display: flex; align-items: stretch; }
+.ui-input-group > .ui-addon { display: flex; align-items: center; padding: 0 var(--space-3); border: 1px solid var(--border-control); background: var(--surface-sunken); color: var(--text-2); }
+.ui-input-group > .ui-addon:first-child { border-right: 0; border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.ui-input-group > .ui-addon:last-child { border-left: 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.ui-input-group > .ui-input { border-radius: 0; }
+.ui-input-group > .ui-input:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.ui-input-group > .ui-input:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.ui-check { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--control-h-sm); cursor: pointer; }
+.ui-check input { width: 16px; height: 16px; accent-color: var(--brand-ink); margin: 0; }
+.ui-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-4); }
+.ui-form-grid .ui-span-all { grid-column: 1 / -1; }
+.ui-form-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--border); }
+
+/* Qty stepper (POS, receiving) */
+.ui-stepper { display: inline-flex; align-items: center; border: 1px solid var(--border-control); border-radius: var(--radius-sm); overflow: hidden; }
+.ui-stepper button { width: var(--control-h); height: var(--control-h); border: 0; background: var(--surface-sunken); color: var(--text); font: inherit; font-size: var(--text-lg); cursor: pointer; }
+.ui-stepper input { width: 56px; height: var(--control-h); border: 0; text-align: center; font: inherit; font-variant-numeric: tabular-nums; background: var(--surface); color: var(--text); }
+
+/* Scan field: always-focused capture for keyboard-wedge scanners */
+.ui-scan { display: flex; align-items: center; gap: var(--space-3); height: var(--control-h-lg); padding: 0 var(--space-4); border: 2px solid var(--brand-ink); border-radius: var(--radius-md); background: var(--surface); }
+.ui-scan input { flex: 1; min-width: 0; border: 0; outline: none; font: inherit; font-size: var(--text-lg); background: transparent; color: var(--text); }
+.ui-scan .ui-scan-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand-marigold); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-marigold) 30%, transparent); }
+.ui-scan[data-state="ok"] { border-color: var(--success); }
+.ui-scan[data-state="error"] { border-color: var(--danger); animation: ui-shake var(--dur) var(--ease); }
+@keyframes ui-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+/* ---- Badges & status ---------------------------------------------------- */
+.ui-badge { display: inline-flex; align-items: center; gap: var(--space-1); height: 22px; padding: 0 var(--space-2); border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: var(--weight-semibold); white-space: nowrap; background: var(--neutral-soft); color: var(--neutral-badge); }
+.ui-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ui-badge--success { background: var(--success-soft); color: var(--success); }
+.ui-badge--warning { background: var(--warning-soft); color: var(--warning); }
+.ui-badge--danger  { background: var(--danger-soft);  color: var(--danger); }
+.ui-badge--info    { background: var(--info-soft);    color: var(--info); }
+.ui-badge--brand   { background: var(--brand-ink-soft); color: var(--brand-ink); }
+.ui-count { display: inline-flex; min-width: 20px; height: 20px; padding: 0 6px; align-items: center; justify-content: center; border-radius: var(--radius-pill); background: var(--danger); color: var(--text-on-brand); font-size: var(--text-xs); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
+
+/* ---- Alerts, toasts ----------------------------------------------------- */
+.ui-alert { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); border: 1px solid; background: var(--surface); }
+.ui-alert > :first-child { flex-shrink: 0; font-weight: var(--weight-semibold); }
+.ui-alert .ui-alert-body { flex: 1; min-width: 0; color: var(--text); }
+.ui-alert .ui-actions { display: flex; gap: var(--space-2); flex-shrink: 0; }
+.ui-alert--info    { border-color: var(--info);    background: var(--info-soft); }
+.ui-alert--success { border-color: var(--success); background: var(--success-soft); }
+.ui-alert--warning { border-color: var(--warning); background: var(--warning-soft); }
+.ui-alert--danger  { border-color: var(--danger);  background: var(--danger-soft); }
+.ui-alert--info > :first-child { color: var(--info); } .ui-alert--success > :first-child { color: var(--success); }
+.ui-alert--warning > :first-child { color: var(--warning); } .ui-alert--danger > :first-child { color: var(--danger); }
+.ui-toast-region { position: fixed; right: var(--space-6); bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: var(--space-2); z-index: var(--z-toast); }
+.ui-toast { min-width: 280px; max-width: 420px; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--text); color: var(--surface); box-shadow: var(--shadow-overlay); display: flex; gap: var(--space-3); align-items: center; }
+.ui-toast a, .ui-toast button { color: inherit; font-weight: var(--weight-semibold); background: none; border: 0; font: inherit; text-decoration: underline; cursor: pointer; }
+
+/* ---- Panels, KPI tiles -------------------------------------------------- */
+.ui-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); min-width: 0; }
+.ui-panel-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.ui-panel-head .ui-actions { margin-left: auto; display: flex; gap: var(--space-2); }
+.ui-panel-body { padding: var(--space-4); }
+.ui-kpi { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); }
+.ui-kpi-value { font-size: var(--text-3xl); line-height: var(--lh-3xl); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
+.ui-kpi-delta { font-size: var(--text-xs); font-weight: var(--weight-medium); }
+.ui-kpi-delta[data-dir="up"] { color: var(--success); } .ui-kpi-delta[data-dir="down"] { color: var(--danger); }
+.ui-list-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.ui-list-row:last-child { border-bottom: 0; }
+.ui-list-row > :last-child { margin-left: auto; }
+
+/* ---- Tables ------------------------------------------------------------- */
+.ui-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.ui-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--text-sm); line-height: var(--lh-sm); }
+.ui-table th { position: sticky; top: 0; z-index: 1; background: var(--surface-sunken); color: var(--text-2); font-weight: var(--weight-semibold); text-align: left; font-size: var(--text-xs); letter-spacing: .02em; padding: 0 var(--space-3); height: 36px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.ui-table td { padding: 0 var(--space-3); height: var(--row-h); border-bottom: 1px solid var(--border); vertical-align: middle; }
+.ui-table td.ui-wrap { white-space: normal; padding-block: var(--space-2); }
+.ui-table .ui-num, .ui-table .ui-money, .ui-table .ui-qty { text-align: right; }
+.ui-table th[aria-sort] button { all: unset; cursor: pointer; display: inline-flex; gap: var(--space-1); }
+.ui-table tbody tr:hover td { background: var(--bg); }
+.ui-table tbody tr[aria-selected="true"] td { background: var(--brand-ink-soft); }
+.ui-table tr[data-tone="danger"] td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.ui-table tr[data-tone="warning"] td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
+.ui-table--touch td { height: var(--row-h-touch); font-size: var(--text-md); }
+.ui-table .ui-cell-title { font-weight: var(--weight-medium); color: var(--text); }
+.ui-table .ui-cell-sub { font-size: var(--text-xs); color: var(--text-3); }
+.ui-thumb { width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--surface-sunken); object-fit: cover; flex-shrink: 0; }
+
+/* Toolbar above tables: search, filter chips, bulk actions */
+.ui-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.ui-toolbar .ui-search { flex: 1 1 280px; max-width: 420px; }
+.ui-chip { display: inline-flex; align-items: center; gap: var(--space-1); height: var(--control-h-sm); padding: 0 var(--space-3); border: 1px dashed var(--border-control); border-radius: var(--radius-pill); background: var(--surface); color: var(--text-2); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.ui-chip[aria-pressed="true"] { border-style: solid; border-color: var(--brand-ink); background: var(--brand-ink-soft); color: var(--brand-ink); }
+.ui-bulkbar { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); background: var(--brand-ink-soft); color: var(--brand-ink); font-weight: var(--weight-medium); }
+.ui-pager { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); font-size: var(--text-sm); color: var(--text-2); }
+
+/* Mobile: tables marked data-collapse become stacked cards under 768px */
+@media (max-width: 767px) {
+  .ui-table[data-collapse] thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .ui-table[data-collapse], .ui-table[data-collapse] tbody, .ui-table[data-collapse] tr, .ui-table[data-collapse] td { display: block; width: 100%; }
+  .ui-table[data-collapse] tr { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+  .ui-table[data-collapse] td { height: auto; border: 0; padding: 2px 0; display: flex; justify-content: space-between; gap: var(--space-3); text-align: right; }
+  .ui-table[data-collapse] td::before { content: attr(data-label); color: var(--text-3); font-size: var(--text-xs); text-align: left; }
+  .ui-table[data-collapse] td[data-primary] { font-size: var(--text-md); justify-content: flex-start; text-align: left; }
+  .ui-table[data-collapse] td[data-primary]::before { content: none; }
+}
+
+/* ---- Tabs, segmented, steps --------------------------------------------- */
+.ui-tabs { display: flex; gap: var(--space-4); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.ui-tab { all: unset; cursor: pointer; padding: var(--space-2) 0; color: var(--text-2); font-weight: var(--weight-medium); border-bottom: 2px solid transparent; white-space: nowrap; }
+.ui-tab[aria-selected="true"] { color: var(--brand-ink); border-bottom-color: var(--brand-ink); }
+.ui-segmented { display: inline-flex; padding: 2px; background: var(--surface-sunken); border-radius: var(--radius-sm); gap: 2px; }
+.ui-segmented button { all: unset; cursor: pointer; padding: 0 var(--space-3); height: 28px; border-radius: 3px; font-size: var(--text-sm); color: var(--text-2); }
+.ui-segmented button[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: 0 1px 2px rgba(22,27,38,.12); }
+.ui-steps { display: flex; gap: var(--space-2); list-style: none; padding: 0; margin: 0; flex-wrap: wrap; }
+.ui-steps li { display: flex; align-items: center; gap: var(--space-2); color: var(--text-3); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.ui-steps li::before { content: attr(data-n); display: inline-flex; width: 22px; height: 22px; border-radius: 50%; align-items: center; justify-content: center; border: 1px solid var(--border-control); font-size: var(--text-xs); }
+.ui-steps li[aria-current="step"] { color: var(--brand-ink); } .ui-steps li[aria-current="step"]::before { background: var(--brand-ink); border-color: var(--brand-ink); color: var(--text-on-brand); }
+.ui-steps li[data-done]::before { content: "✓"; background: var(--success-soft); border-color: var(--success); color: var(--success); }
+.ui-steps li + li { padding-left: var(--space-2); border-left: 1px solid var(--border); }
+
+/* ---- Overlays ----------------------------------------------------------- */
+.ui-backdrop { position: fixed; inset: 0; background: rgba(22, 27, 38, .45); z-index: var(--z-overlay); display: grid; place-items: center; padding: var(--space-4); }
+.ui-dialog { width: min(520px, 100%); max-height: calc(100% - var(--space-8)); overflow: auto; background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow-overlay); display: flex; flex-direction: column; }
+.ui-dialog-head { padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border); }
+.ui-dialog-body { padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4); }
+.ui-dialog-foot { padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: var(--space-2); }
+.ui-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 100%); background: var(--surface); box-shadow: var(--shadow-overlay); z-index: var(--z-drawer); display: flex; flex-direction: column; }
+.ui-menu { min-width: 180px; padding: var(--space-1); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-overlay); }
+.ui-menu [role="menuitem"] { display: flex; align-items: center; height: var(--control-h-sm); padding: 0 var(--space-3); border-radius: var(--radius-sm); cursor: pointer; }
+.ui-menu [role="menuitem"]:hover, .ui-menu [role="menuitem"]:focus-visible { background: var(--surface-sunken); }
+
+/* ---- States: empty, loading, error -------------------------------------- */
+.ui-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--space-2); padding: var(--space-12) var(--space-4); color: var(--text-2); }
+.ui-empty .ui-h3 { color: var(--text); }
+.ui-empty .ui-actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); flex-wrap: wrap; justify-content: center; }
+.ui-skeleton { display: block; height: 12px; border-radius: var(--radius-sm); background: linear-gradient(90deg, var(--surface-sunken) 0%, var(--border) 50%, var(--surface-sunken) 100%); background-size: 200% 100%; animation: ui-shimmer 1.2s linear infinite; }
+@keyframes ui-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .ui-skeleton, .ui-btn[aria-busy="true"]::after, .ui-scan[data-state="error"] { animation: none; } }
+.ui-progress { height: 6px; border-radius: var(--radius-pill); background: var(--surface-sunken); overflow: hidden; }
+.ui-progress > span { display: block; height: 100%; background: var(--brand-ink); }
+.ui-kbd { font-family: var(--font-mono); font-size: var(--text-xs); padding: 1px 6px; border: 1px solid var(--border-control); border-bottom-width: 2px; border-radius: var(--radius-sm); background: var(--surface); color: var(--text-2); }
+.ui-correlation { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-3); }
+
+/* ---- Responsive shell --------------------------------------------------- */
+@media (max-width: 1279px) {
+  .ui-shell { grid-template-columns: var(--sidebar-w-collapsed) minmax(0, 1fr); }
+  .ui-sidebar .ui-nav-label, .ui-sidebar .ui-eyebrow, .ui-brand-name { display: none; }
+  .ui-nav-link { justify-content: center; }
+}
+@media (max-width: 767px) {
+  .ui-shell { grid-template-columns: minmax(0, 1fr); }
+  .ui-sidebar { display: none; }                      /* opened as a drawer from the top bar */
+  .ui-sidebar[data-open] { display: flex; position: fixed; inset: 0 auto 0 0; width: min(300px, 85vw); z-index: var(--z-drawer); box-shadow: var(--shadow-overlay); }
+  .ui-sidebar[data-open] .ui-nav-label, .ui-sidebar[data-open] .ui-eyebrow, .ui-sidebar[data-open] .ui-brand-name { display: revert; }
+  .ui-topbar { padding: 0 var(--space-4); }
+  .ui-content { padding: var(--space-4); }
+  .ui-page-header .ui-actions { margin-left: 0; width: 100%; }
+}
+@media (pointer: coarse) {
+  .ui-btn, .ui-input, .ui-select { min-height: 44px; }
+  .ui-table td { height: var(--row-h-touch); }
+}
+
+/* ---- presentation page only ---- */
+body{margin:0;background:var(--bg);color:var(--text)}
+.page{max-width:1480px;margin:0 auto;padding-inline:16px;padding-block:24px 56px;display:flex;flex-direction:column;gap:16px}
+.page>header{display:flex;flex-direction:column;gap:6px;max-width:80ch}
+.page>header h1{margin:0;font-size:1.5rem;line-height:2rem;font-weight:600}
+.page>header p{margin:0;color:var(--text-2);line-height:1.6}
+.picker{display:flex;flex-wrap:wrap;gap:6px}
+.picker button{font:inherit;font-size:var(--text-sm);height:32px;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-pill);background:var(--surface);color:var(--text);cursor:pointer}
+.picker button[aria-selected="true"]{background:var(--brand-ink);border-color:var(--brand-ink);color:var(--text-on-brand)}
+.stage{border:1px solid var(--border);border-radius:var(--radius-md);overflow:auto;background:var(--bg);box-shadow:var(--shadow-overlay)}
+.frame{min-width:1180px;height:780px;overflow:hidden}
+.frame .ui-shell{height:100%}
+.frame .ui-sidebar{height:100%;position:static}
+.frame .ui-main{overflow:auto;height:100%}
+.frame.phone{min-width:0;width:390px;height:780px;margin:24px auto;border:8px solid var(--text);border-radius:36px;overflow:auto}
+.why{font-size:var(--text-sm);color:var(--text-2);line-height:1.6;max-width:90ch}
+.why b{color:var(--text)}
+.g{display:grid;gap:var(--space-4)}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g21{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}.gside{grid-template-columns:minmax(0,1fr) 380px}
+.spark{display:block;width:100%;height:36px}
+.tot{display:flex;justify-content:space-between;padding:4px 0;font-variant-numeric:tabular-nums}
+.tot.big{font-size:var(--text-4xl);line-height:var(--lh-4xl);font-weight:600;border-top:1px solid var(--border);padding-top:12px;margin-top:6px}
+.pay{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.imggrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.img{aspect-ratio:1;border-radius:var(--radius-sm);background:repeating-linear-gradient(45deg,var(--surface-sunken) 0 6px,var(--surface) 6px 12px);border:1px solid var(--border);display:flex;align-items:flex-end;padding:6px;max-width:100%}
+.img.primary{outline:2px solid var(--brand-ink);outline-offset:-2px}
+.tl{display:flex;flex-direction:column}
+.tl>div{display:grid;grid-template-columns:110px 14px 1fr;gap:10px;padding:6px 0;font-size:var(--text-sm)}
+.tl i{width:10px;height:10px;border-radius:50%;background:var(--border-control);margin-top:4px}
+.bar{display:flex;align-items:flex-end;gap:6px;height:120px;padding-top:8px}
+.bar span{flex:1;background:var(--brand-ink-soft);border-radius:3px 3px 0 0;position:relative}
+.bar span.today{background:var(--brand-ink)}
+.barx{display:flex;gap:6px;font-size:var(--text-xs);color:var(--text-3)}.barx span{flex:1;text-align:center}
+.lucide{width:18px;height:18px;stroke-width:1.75;flex-shrink:0}
+</style>
+
+<div class="ui-root">
+<div class="page">
+  <header>
+    <span class="ui-eyebrow">Phase 2 · Screen designs · for approval</span>
+    <h1>TRIDENT screens</h1>
+    <p>The main screens built only from the design-system tokens and components: one dashboard, one table, one form and three operational screens. Approve these and every other screen follows the same patterns. All data is example data.</p>
+  </header>
+  <div class="picker" role="tablist" aria-label="Screens" id="picker"></div>
+  <p class="why" id="why"></p>
+  <div class="stage" id="stage">
+
+<!-- DASHBOARD -->
+<template data-id="dashboard" data-nav="Dashboard" data-label="Dashboard" data-why="<b>Pattern: dashboard.</b> Answers the PRD's four questions in reading order: how are we doing (KPIs), what needs attention (one list, highest severity first), what's selling, what's next (quick actions). One chart only.">
+<div class="ui-content">
+  <div class="ui-page-header"><div><h1 class="ui-h1">Good morning, Priya</h1><span class="ui-caption">Monday 12 Oct 2026 · Sutra Retail, Dehradun</span></div><div class="ui-actions"><button class="ui-btn" type="button">Receive stock</button><button class="ui-btn" type="button">Add product</button><button class="ui-btn ui-btn--primary" type="button">Open POS <span class="ui-kbd" style="background:transparent;color:inherit;border-color:currentColor">F1</span></button></div></div>
+  <div class="g g4">
+    <div class="ui-panel ui-kpi"><span class="ui-caption">Sales today</span><span class="ui-kpi-value">₹48,920</span><span class="ui-kpi-delta" data-dir="up">▲ 12% vs last Monday · 37 orders</span></div>
+    <div class="ui-panel ui-kpi"><span class="ui-caption">Stock value at cost</span><span class="ui-kpi-value">₹18,42,310</span><span class="ui-caption">1,284 active SKUs</span></div>
+    <div class="ui-panel ui-kpi"><span class="ui-caption">Low or out of stock</span><span class="ui-kpi-value">23</span><span class="ui-kpi-delta" style="color:var(--warning)">5 sell online</span></div>
+    <div class="ui-panel ui-kpi"><span class="ui-caption">Website sync</span><span class="ui-kpi-value" style="font-size:var(--text-xl)"><span class="ui-badge ui-badge--success">Healthy</span></span><span class="ui-caption">Last push 8 s ago · 0 failed</span></div>
+  </div>
+  <div class="g g21">
+    <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Needs attention</span><span class="ui-count">4</span></div>
+      <div class="ui-list-row"><span class="ui-badge ui-badge--danger">Stock exception</span><span>2 paid web orders could not reserve stock</span><button class="ui-btn ui-btn--sm ui-btn--ghost" type="button">Review</button></div>
+      <div class="ui-list-row"><span class="ui-badge ui-badge--info">Ready to pick</span><span>6 web orders, oldest paid 3 h ago</span><button class="ui-btn ui-btn--sm ui-btn--ghost" type="button">Start picking</button></div>
+      <div class="ui-list-row"><span class="ui-badge ui-badge--warning">Approval</span><span>Stocktake ST-0012 · Back room · 5 variances (−₹1,630)</span><button class="ui-btn ui-btn--sm ui-btn--ghost" type="button">Review</button></div>
+      <div class="ui-list-row"><span class="ui-badge ui-badge--warning">Purchase</span><span>PO-0217 from Sutra Handloom is 2 days late</span><button class="ui-btn ui-btn--sm ui-btn--ghost" type="button">Open PO</button></div>
+    </div>
+    <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Sales · last 7 days</span></div><div class="ui-panel-body">
+      <div class="bar" role="img" aria-label="Daily sales: Tue 31k, Wed 28k, Thu 39k, Fri 46k, Sat 61k, Sun 52k, Mon 49k"><span style="height:51%"></span><span style="height:46%"></span><span style="height:64%"></span><span style="height:75%"></span><span style="height:100%"></span><span style="height:85%"></span><span class="today" style="height:80%"></span></div>
+      <div class="barx"><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span><span>Today</span></div>
+      <div class="ui-caption" style="margin-top:8px">Revenue incl. GST. Not profit, not cash received.</div>
+    </div></div>
+  </div>
+  <div class="g g21">
+    <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Recent sales</span><div class="ui-actions"><button class="ui-btn ui-btn--sm ui-btn--ghost" type="button">All orders</button></div></div>
+      <div class="ui-table-wrap"><table class="ui-table"><thead><tr><th scope="col">Order</th><th scope="col">Channel</th><th scope="col">Customer</th><th scope="col">Status</th><th scope="col" class="ui-money">Total</th><th scope="col">Time</th></tr></thead><tbody>
+        <tr><td class="ui-code">SO-10482</td><td>Counter</td><td>Walk-in</td><td><span class="ui-badge ui-badge--success">Paid</span></td><td class="ui-money">₹2,292.00</td><td class="ui-muted">10:42</td></tr>
+        <tr><td class="ui-code">WC-8832</td><td>Website</td><td>Kavya S.</td><td><span class="ui-badge ui-badge--danger">Stock exception</span></td><td class="ui-money">₹3,597.00</td><td class="ui-muted">10:40</td></tr>
+        <tr><td class="ui-code">WC-8831</td><td>Website</td><td>Ananya R.</td><td><span class="ui-badge ui-badge--info">Ready to pick</span></td><td class="ui-money">₹2,450.00</td><td class="ui-muted">10:31</td></tr>
+        <tr><td class="ui-code">WC-8830</td><td>Website</td><td>Rahul M.</td><td><span class="ui-badge ui-badge--warning">Awaiting payment</span></td><td class="ui-money">₹899.00</td><td class="ui-muted">10:18</td></tr>
+      </tbody></table></div></div>
+    <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Best sellers · 7 days</span></div>
+      <div class="ui-list-row"><span>Cotton Kurta · Indigo · M</span><span class="ui-qty">42</span></div>
+      <div class="ui-list-row"><span>Leather Sandal · Tan · 8</span><span class="ui-qty">31</span></div>
+      <div class="ui-list-row"><span>Steel Bottle 1 L</span><span class="ui-qty">28</span></div>
+      <div class="ui-list-row"><span>Silk Dupatta · Maroon</span><span class="ui-qty">19</span></div>
+    </div>
+  </div>
+</div>
+</template>
+
+<!-- PRODUCTS TABLE -->
+<template data-id="products" data-nav="Products" data-label="Products table" data-why="<b>Pattern: list page.</b> Page header with one primary action, toolbar (search accepts a scan), filter chips, bulk bar on selection, sortable sticky header, right-aligned numbers, tone stripe on rows needing attention, cursor pager. Every list screen (stock, orders, POs, invoices) uses this layout.">
+<div class="ui-content">
+  <div class="ui-page-header"><h1 class="ui-h1">Products</h1><span class="ui-caption">1,284 active</span><div class="ui-actions"><button class="ui-btn" type="button">Import</button><button class="ui-btn" type="button">Export</button><button class="ui-btn ui-btn--primary" type="button">Add product</button></div></div>
+  <div class="ui-tabs" role="tablist"><button class="ui-tab" role="tab" aria-selected="true" type="button">Active · 1,284</button><button class="ui-tab" role="tab" aria-selected="false" type="button">Drafts · 12</button><button class="ui-tab" role="tab" aria-selected="false" type="button">Archived · 40</button><button class="ui-tab" role="tab" aria-selected="false" type="button">Website issues · 2</button></div>
+  <div class="ui-panel">
+    <div class="ui-toolbar"><input class="ui-input ui-search" placeholder="Search name, SKU or scan barcode" aria-label="Search products"><button class="ui-chip" type="button" aria-pressed="true">Category: Apparel</button><button class="ui-chip" type="button" aria-pressed="false">+ Brand</button><button class="ui-chip" type="button" aria-pressed="false">+ Stock</button><button class="ui-chip" type="button" aria-pressed="false">+ Website</button></div>
+    <div class="ui-bulkbar">2 selected<button class="ui-btn ui-btn--sm" type="button">Print labels</button><button class="ui-btn ui-btn--sm" type="button">Publish to website</button><button class="ui-btn ui-btn--sm" type="button">Archive</button><button class="ui-btn ui-btn--sm ui-btn--ghost" type="button" style="margin-left:auto">Clear selection</button></div>
+    <div class="ui-table-wrap"><table class="ui-table">
+      <thead><tr><th scope="col" style="width:40px"><span class="ui-sr-only">Select</span></th><th scope="col" aria-sort="ascending"><button type="button">Product ▲</button></th><th scope="col">SKU</th><th scope="col">Category</th><th scope="col" class="ui-money">Price</th><th scope="col" class="ui-money">Cost</th><th scope="col" class="ui-qty">Available</th><th scope="col">Website</th><th scope="col"><span class="ui-sr-only">Actions</span></th></tr></thead>
+      <tbody>
+      <tr aria-selected="true"><td><label class="ui-check"><input type="checkbox" checked aria-label="Select Cotton Kurta"></label></td><td><div style="display:flex;gap:10px;align-items:center"><span class="ui-thumb"></span><div><div class="ui-cell-title">Cotton Kurta</div><div class="ui-cell-sub">4 variants · Sutra Handloom</div></div></div></td><td class="ui-code">KUR-IND-*</td><td>Kurtas</td><td class="ui-money">₹899 – ₹999</td><td class="ui-money">₹410 – ₹450</td><td class="ui-qty">38</td><td><span class="ui-badge ui-badge--success">Synced</span></td><td><button class="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon" type="button" aria-label="More actions">⋯</button></td></tr>
+      <tr aria-selected="true" data-tone="warning"><td><label class="ui-check"><input type="checkbox" checked aria-label="Select Leather Sandal"></label></td><td><div style="display:flex;gap:10px;align-items:center"><span class="ui-thumb"></span><div><div class="ui-cell-title">Leather Sandal</div><div class="ui-cell-sub">6 variants · Kolhapuri Co.</div></div></div></td><td class="ui-code">SAN-TAN-*</td><td>Footwear</td><td class="ui-money">₹1,299</td><td class="ui-money">₹660</td><td class="ui-qty">4 <span class="ui-badge ui-badge--warning">Low</span></td><td><span class="ui-badge ui-badge--success">Synced</span></td><td><button class="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon" type="button" aria-label="More actions">⋯</button></td></tr>
+      <tr><td><label class="ui-check"><input type="checkbox" aria-label="Select Steel Bottle"></label></td><td><div style="display:flex;gap:10px;align-items:center"><span class="ui-thumb"></span><div><div class="ui-cell-title">Steel Bottle 1 L</div><div class="ui-cell-sub">Hydra</div></div></div></td><td class="ui-code">BTL-1000</td><td>Home</td><td class="ui-money">₹549</td><td class="ui-money">₹240</td><td class="ui-qty">112</td><td><span class="ui-badge ui-badge--warning">Queued</span></td><td><button class="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon" type="button" aria-label="More actions">⋯</button></td></tr>
+      <tr data-tone="danger"><td><label class="ui-check"><input type="checkbox" aria-label="Select Silk Dupatta"></label></td><td><div style="display:flex;gap:10px;align-items:center"><span class="ui-thumb"></span><div><div class="ui-cell-title">Silk Dupatta</div><div class="ui-cell-sub">3 variants · Sutra Handloom</div></div></div></td><td class="ui-code">DUP-SLK-*</td><td>Dupattas</td><td class="ui-money">₹1,450</td><td class="ui-money">₹690</td><td class="ui-qty">17</td><td><span class="ui-badge ui-badge--danger">Sync failed</span></td><td><button class="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon" type="button" aria-label="More actions">⋯</button></td></tr>
+      <tr data-tone="danger"><td><label class="ui-check"><input type="checkbox" aria-label="Select Brass Diya Set"></label></td><td><div style="display:flex;gap:10px;align-items:center"><span class="ui-thumb"></span><div><div class="ui-cell-title">Brass Diya Set</div><div class="ui-cell-sub">Set of 4</div></div></div></td><td class="ui-code">DIY-BR-04</td><td>Pooja</td><td class="ui-money">₹699</td><td class="ui-money">₹310</td><td class="ui-qty">0 <span class="ui-badge ui-badge--danger">Out</span></td><td><span class="ui-badge">Not published</span></td><td><button class="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon" type="button" aria-label="More actions">⋯</button></td></tr>
+      </tbody></table></div>
+    <div class="ui-pager"><span>Showing 1–25 of 1,284</span><div style="display:flex;gap:8px"><button class="ui-btn ui-btn--sm" type="button" disabled>Previous</button><button class="ui-btn ui-btn--sm" type="button">Next</button></div></div>
+  </div>
+  <p class="ui-caption" style="margin:0">Cost column is rendered only for roles with cost.view. A cashier sees the same table without it and without Import/Export.</p>
+</div>
+</template>
+
+<!-- PRODUCT FORM -->
+<template data-id="product" data-nav="Products" data-label="Product form" data-why="<b>Pattern: record form.</b> Two-column page: main fields left in titled panels, status and side panels right. Inline validation on blur and on save; errors say how to fix. Sticky save bar appears when something changed. Every create/edit screen (supplier, PO, settings) uses this layout.">
+<div class="ui-content">
+  <div class="ui-page-header"><div><span class="ui-caption">Products /</span><h1 class="ui-h1">Cotton Kurta</h1></div><span class="ui-badge ui-badge--success">Active</span><span class="ui-badge ui-badge--success">On website</span><div class="ui-actions"><button class="ui-btn" type="button">Archive</button><button class="ui-btn" type="button">Print labels</button><button class="ui-btn ui-btn--primary" type="button">Save changes</button></div></div>
+  <div class="ui-alert ui-alert--danger" role="alert"><span>1 error</span><div class="ui-alert-body">Fix the SKU on variant L · Indigo before saving.</div></div>
+  <div class="g gside">
+    <div class="g">
+      <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Details</span></div><div class="ui-panel-body ui-form-grid">
+        <div class="ui-field ui-span-all"><label class="ui-label" for="p-n">Name<span class="ui-req" aria-hidden="true">*</span></label><input class="ui-input" id="p-n" value="Cotton Kurta"></div>
+        <div class="ui-field"><label class="ui-label" for="p-c">Category</label><select class="ui-select" id="p-c"><option>Apparel › Kurtas</option></select></div>
+        <div class="ui-field"><label class="ui-label" for="p-b">Brand</label><select class="ui-select" id="p-b"><option>Sutra Handloom</option></select></div>
+        <div class="ui-field"><label class="ui-label" for="p-h">HSN code</label><input class="ui-input ui-code" id="p-h" value="62114200"></div>
+        <div class="ui-field"><label class="ui-label" for="p-g">GST rate</label><select class="ui-select" id="p-g"><option>5%</option></select><span class="ui-help">Price includes GST (store setting)</span></div>
+      </div></div>
+      <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Variants</span><span class="ui-caption">Size: S M L XL · Colour: Indigo</span><div class="ui-actions"><button class="ui-btn ui-btn--sm" type="button">Edit options</button></div></div>
+        <div class="ui-table-wrap"><table class="ui-table"><thead><tr><th scope="col">Variant</th><th scope="col">SKU</th><th scope="col">Barcode</th><th scope="col" class="ui-money">Price</th><th scope="col" class="ui-money">MRP</th><th scope="col" class="ui-money">Cost</th><th scope="col" class="ui-qty">On hand</th></tr></thead><tbody>
+          <tr><td>S · Indigo</td><td class="ui-code">KUR-IND-S</td><td class="ui-code">2000000012347</td><td class="ui-money">₹899.00</td><td class="ui-money">₹1,199.00</td><td class="ui-money">₹410.00</td><td class="ui-qty">9</td></tr>
+          <tr><td>M · Indigo</td><td class="ui-code">KUR-IND-M</td><td class="ui-code">2000000012354</td><td class="ui-money">₹899.00</td><td class="ui-money">₹1,199.00</td><td class="ui-money">₹410.00</td><td class="ui-qty">14</td></tr>
+          <tr data-tone="danger"><td>L · Indigo</td><td class="ui-wrap"><input class="ui-input ui-code" value="KUR-IND-M" aria-invalid="true" aria-label="SKU for L Indigo" style="height:30px"><div class="ui-error" style="margin-top:4px">Already used by M · Indigo</div></td><td><button class="ui-btn ui-btn--sm ui-btn--ghost" type="button">Generate</button></td><td class="ui-money">₹949.00</td><td class="ui-money">₹1,249.00</td><td class="ui-money">₹430.00</td><td class="ui-qty">11</td></tr>
+          <tr><td>XL · Indigo</td><td class="ui-code">KUR-IND-XL</td><td class="ui-code">8901234567892</td><td class="ui-money">₹999.00</td><td class="ui-money">₹1,299.00</td><td class="ui-money">₹450.00</td><td class="ui-qty">4</td></tr>
+        </tbody></table></div></div>
+    </div>
+    <div class="g" style="align-content:start">
+      <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Images</span><span class="ui-caption">drag to reorder</span></div><div class="ui-panel-body">
+        <div class="imggrid"><div class="img primary"><span class="ui-badge ui-badge--brand">Main</span></div><div class="img"></div><div class="img"><span class="ui-badge ui-badge--danger">Failed</span></div><div class="img" style="background:var(--surface);border-style:dashed;align-items:center;justify-content:center;color:var(--text-2);font-size:var(--text-sm)">+ Add</div></div>
+        <p class="ui-caption" style="margin:8px 0 0">JPG, PNG or WebP up to 5 MB. Image 3 is too large for the website (6.2 MB): replace it.</p>
+      </div></div>
+      <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Website</span></div><div class="ui-panel-body" style="display:flex;flex-direction:column;gap:10px">
+        <label class="ui-check" for="p-w"><input type="checkbox" id="p-w" checked> Sell on website</label>
+        <div class="ui-caption">Woo product #4812 · 4 variations linked<br>Last synced 2 min ago</div>
+        <button class="ui-btn ui-btn--sm" type="button">Publish now</button>
+      </div></div>
+      <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Stock</span></div>
+        <div class="ui-list-row"><span>Shop floor</span><span class="ui-qty">22</span></div><div class="ui-list-row"><span>Back room</span><span class="ui-qty">16</span></div><div class="ui-list-row"><span class="ui-muted">Reserved for web orders</span><span class="ui-qty">2</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</template>
+
+<!-- POS -->
+<template data-id="pos" data-nav="POS" data-label="POS (counter)" data-focus="1" data-why="<b>Pattern: counter screen.</b> No sidebar, counter density (48 px controls, 52 px rows), the scan field always holds focus, shortcuts on every key action, totals large and live-announced. Designed for a 10-inch tablet in landscape and a keyboard-wedge scanner.">
+<div class="ui-content" style="max-width:none;padding:16px">
+  <div class="ui-page-header"><h1 class="ui-h1">Counter 1</h1><span class="ui-caption">Ravi · shift started 09:30</span><div class="ui-actions"><button class="ui-btn" type="button">Hold sale</button><button class="ui-btn" type="button">Return</button><button class="ui-btn" type="button">Exit <span class="ui-kbd">Esc</span></button></div></div>
+  <div class="g gside" style="grid-template-columns:minmax(0,1fr) 400px">
+    <div class="g" style="align-content:start">
+      <label class="ui-scan" for="pos-scan"><span class="ui-scan-dot" aria-hidden="true"></span><span class="ui-sr-only">Scan or search</span><input id="pos-scan" placeholder="Scan barcode or type name / SKU"><span class="ui-kbd">F2</span></label>
+      <div class="ui-panel"><div class="ui-table-wrap"><table class="ui-table ui-table--touch">
+        <thead><tr><th scope="col">Item</th><th scope="col" style="text-align:center">Qty</th><th scope="col" class="ui-money">Price</th><th scope="col" class="ui-num">Disc.</th><th scope="col" class="ui-money">Amount</th><th scope="col"><span class="ui-sr-only">Remove</span></th></tr></thead>
+        <tbody>
+          <tr><td class="ui-wrap"><div class="ui-cell-title">Cotton Kurta · M</div><div class="ui-cell-sub"><span class="ui-code">KUR-IND-M</span> · 12 available · GST 5%</div></td><td style="text-align:center"><div class="ui-stepper"><button type="button" aria-label="Decrease">−</button><input value="2" aria-label="Quantity"><button type="button" aria-label="Increase">+</button></div></td><td class="ui-money">₹899.00</td><td class="ui-num ui-muted">—</td><td class="ui-money">₹1,798.00</td><td><button class="ui-btn ui-btn--ghost ui-btn--icon" type="button" aria-label="Remove Cotton Kurta">✕</button></td></tr>
+          <tr><td class="ui-wrap"><div class="ui-cell-title">Steel Bottle 1 L</div><div class="ui-cell-sub"><span class="ui-code">BTL-1000</span> · GST 18%</div></td><td style="text-align:center"><div class="ui-stepper"><button type="button" aria-label="Decrease">−</button><input value="1" aria-label="Quantity"><button type="button" aria-label="Increase">+</button></div></td><td class="ui-money">₹549.00</td><td class="ui-num">10%</td><td class="ui-money">₹494.10</td><td><button class="ui-btn ui-btn--ghost ui-btn--icon" type="button" aria-label="Remove Steel Bottle">✕</button></td></tr>
+          <tr data-tone="danger"><td class="ui-wrap"><div class="ui-cell-title">Leather Sandal · 8</div><div class="ui-error">Only 3 available. Lower the quantity to continue.</div></td><td style="text-align:center"><div class="ui-stepper"><button type="button" aria-label="Decrease">−</button><input value="4" aria-label="Quantity" aria-invalid="true"><button type="button" aria-label="Increase">+</button></div></td><td class="ui-money">₹1,299.00</td><td class="ui-num ui-muted">—</td><td class="ui-money ui-muted">—</td><td><button class="ui-btn ui-btn--ghost ui-btn--icon" type="button" aria-label="Remove Leather Sandal">✕</button></td></tr>
+        </tbody></table></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ui-btn ui-btn--lg" type="button">Discount <span class="ui-kbd">F8</span></button><button class="ui-btn ui-btn--lg" type="button">Customer <span class="ui-kbd">F4</span></button><button class="ui-btn ui-btn--lg ui-btn--danger" type="button">Clear sale</button></div>
+    </div>
+    <div class="ui-panel" style="align-self:start"><div class="ui-panel-head"><span class="ui-h3">Bill</span><span class="ui-caption">Walk-in customer</span></div><div class="ui-panel-body" aria-live="polite">
+      <div class="tot"><span>Taxable value</span><span>₹2,131.11</span></div>
+      <div class="tot ui-muted"><span>CGST</span><span>₹80.50</span></div>
+      <div class="tot ui-muted"><span>SGST</span><span>₹80.50</span></div>
+      <div class="tot ui-muted"><span>Discount (included)</span><span>₹54.90</span></div>
+      <div class="tot ui-muted"><span>Round off</span><span>−₹0.11</span></div>
+      <div class="tot big"><span>Total</span><span>₹2,292.00</span></div>
+      <div class="ui-segmented" role="group" aria-label="Payment method" style="display:flex;margin:14px 0 10px"><button type="button" aria-pressed="false" style="flex:1;text-align:center;height:40px">Cash</button><button type="button" aria-pressed="true" style="flex:1;text-align:center;height:40px">UPI</button><button type="button" aria-pressed="false" style="flex:1;text-align:center;height:40px">Card</button><button type="button" aria-pressed="false" style="flex:1;text-align:center;height:40px">Split</button></div>
+      <div class="ui-field"><label class="ui-label" for="pos-ref">UPI reference</label><input class="ui-input ui-code" id="pos-ref" value="412345678901" style="height:var(--control-h-lg)"></div>
+      <button class="ui-btn ui-btn--primary ui-btn--lg ui-btn--block" type="button" aria-disabled="true" aria-describedby="pos-block" style="margin-top:14px;height:56px">Complete sale · ₹2,292.00 <span class="ui-kbd" style="background:transparent;color:inherit;border-color:currentColor">F9</span></button>
+      <p id="pos-block" class="ui-caption" style="margin:10px 0 0">Blocked until the Leather Sandal line is fixed.</p>
+    </div></div>
+  </div>
+</div>
+</template>
+
+<!-- ORDER DETAIL -->
+<template data-id="order" data-nav="Orders" data-label="Order detail" data-why="<b>Pattern: record detail.</b> Status badges and the one blocking problem first (as an alert with its fix), then lines, then customer and timeline. The raw website status sits beside the ERP status so nothing is hidden.">
+<div class="ui-content">
+  <div class="ui-page-header"><div><span class="ui-caption">Orders /</span><h1 class="ui-h1">WC-8832</h1></div><span class="ui-badge ui-badge--danger">Stock exception</span><span class="ui-badge ui-badge--success">Paid · UPI</span><span class="ui-caption">Website status: <span class="ui-code">processing</span></span><div class="ui-actions"><button class="ui-btn" type="button">Open on website ↗</button><button class="ui-btn ui-btn--primary" type="button">Retry reservation</button></div></div>
+  <div class="ui-alert ui-alert--danger" role="alert"><span>Can't reserve</span><div class="ui-alert-body">Leather Sandal · 8 needs 2, Shop floor has 1. Back room has 3: transfer 1 and retry. If you can't fulfil it, cancel and refund on the website.</div><div class="ui-actions"><button class="ui-btn ui-btn--sm" type="button">Transfer stock</button></div></div>
+  <div class="g g21">
+    <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Items</span></div><div class="ui-table-wrap"><table class="ui-table"><thead><tr><th scope="col">SKU</th><th scope="col">Item</th><th scope="col" class="ui-qty">Qty</th><th scope="col" class="ui-money">Price</th><th scope="col">Stock</th></tr></thead><tbody>
+      <tr><td class="ui-code">KUR-IND-L</td><td>Cotton Kurta · L</td><td class="ui-qty">1</td><td class="ui-money">₹949.00</td><td><span class="ui-badge ui-badge--success">Reserved</span></td></tr>
+      <tr data-tone="danger"><td class="ui-code">SAN-TAN-8</td><td>Leather Sandal · 8</td><td class="ui-qty">2</td><td class="ui-money">₹1,299.00</td><td><span class="ui-badge ui-badge--danger">Short by 1</span></td></tr>
+      <tr data-tone="warning"><td class="ui-code ui-muted">GW-01</td><td>Gift wrap <span class="ui-caption">· unknown SKU</span></td><td class="ui-qty">1</td><td class="ui-money">₹50.00</td><td><button class="ui-btn ui-btn--sm ui-btn--ghost" type="button">Link product</button></td></tr>
+    </tbody><tfoot><tr><td colspan="3"></td><td class="ui-money" style="font-weight:600">₹3,597.00</td><td></td></tr></tfoot></table></div></div>
+    <div class="g" style="align-content:start">
+      <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Customer</span></div><div class="ui-panel-body" style="display:flex;flex-direction:column;gap:4px;line-height:1.5"><b>Kavya S.</b><span class="ui-muted">+91 98•••• 4410</span><span>12 MG Road, Bengaluru, Karnataka 560001</span><span class="ui-caption">Place of supply: Karnataka (29) · inter-state, IGST</span></div></div>
+      <div class="ui-panel"><div class="ui-panel-head"><span class="ui-h3">Timeline</span></div><div class="ui-panel-body tl">
+        <div><span class="ui-caption">10:40:12</span><i></i><span>Order received from website</span></div>
+        <div><span class="ui-caption">10:40:51</span><i style="background:var(--success)"></i><span>Payment confirmed · UPI</span></div>
+        <div><span class="ui-caption">10:40:52</span><i style="background:var(--danger)"></i><span>1 of 3 lines could not be reserved · Priya notified</span></div>
+        <div><span class="ui-caption">10:40:53</span><i></i><span class="ui-muted">Duplicate notification ignored</span></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+</template>
+
+<!-- PICK -->
+<template data-id="pick" data-nav="Fulfilment" data-label="Pick & pack (counter)" data-focus="1" data-why="<b>Pattern: guided task.</b> Steps across the top, scan field, a list sorted by walking order (location), big progress, and a hard stop with the reason when the wrong item is scanned.">
+<div class="ui-content" style="max-width:none;padding:16px">
+  <div class="ui-page-header"><h1 class="ui-h1">Pick list PK-0044</h1><span class="ui-caption">3 orders · Arjun</span><div class="ui-actions"><button class="ui-btn" type="button">Exit <span class="ui-kbd">Esc</span></button></div></div>
+  <ol class="ui-steps"><li data-n="1" aria-current="step">Pick</li><li data-n="2">Pack</li><li data-n="3">Dispatch</li></ol>
+  <div class="g gside" style="grid-template-columns:minmax(0,1fr) 340px">
+    <div class="g" style="align-content:start">
+      <label class="ui-scan" data-state="error" for="pk-scan"><span class="ui-scan-dot" aria-hidden="true" style="background:var(--danger)"></span><span class="ui-sr-only">Scan item</span><input id="pk-scan" value="2000000045698"><span class="ui-badge ui-badge--danger">Not on this list</span></label>
+      <div class="ui-alert ui-alert--danger" role="alert"><span>Wrong item</span><div class="ui-alert-body">Leather Sandal · 9 is not in these orders. Put it back and scan Cotton Kurta · M.</div></div>
+      <div class="ui-panel"><div class="ui-table-wrap"><table class="ui-table ui-table--touch"><thead><tr><th scope="col">Location</th><th scope="col">Item</th><th scope="col">Barcode</th><th scope="col">Order</th><th scope="col" class="ui-qty">Picked</th></tr></thead><tbody>
+        <tr><td>Shop floor</td><td>Steel Bottle 1 L</td><td class="ui-code">2000000045673</td><td class="ui-code">WC-8831</td><td class="ui-qty"><span class="ui-badge ui-badge--success">2 / 2</span></td></tr>
+        <tr aria-selected="true"><td><b>Shop floor</b></td><td><b>Cotton Kurta · M</b></td><td class="ui-code">2000000012354</td><td class="ui-code">WC-8831</td><td class="ui-qty"><b>0 / 1</b></td></tr>
+        <tr><td>Back room</td><td>Silk Dupatta · Maroon</td><td class="ui-code">2000000033779</td><td class="ui-code">WC-8828</td><td class="ui-qty">0 / 1</td></tr>
+        <tr><td>Back room</td><td>Cotton Kurta · L</td><td class="ui-code">2000000012361</td><td class="ui-code">WC-8827</td><td class="ui-qty">0 / 1</td></tr>
+      </tbody></table></div></div>
+    </div>
+    <div class="ui-panel" style="align-self:start"><div class="ui-panel-body" style="display:flex;flex-direction:column;gap:12px">
+      <span class="ui-caption">Progress</span><span class="ui-kpi-value">2 of 5 items</span>
+      <div class="ui-progress" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100" aria-label="Pick progress"><span style="width:40%"></span></div>
+      <span class="ui-caption">Next: Shop floor → Cotton Kurta · M</span>
+      <button class="ui-btn ui-btn--primary ui-btn--lg ui-btn--block" type="button" disabled>Continue to packing</button>
+      <button class="ui-btn ui-btn--lg ui-btn--block" type="button">Report short item</button>
+    </div></div>
+  </div>
+</div>
+</template>
+
+<!-- PHONE -->
+<template data-id="phone" data-nav="Stock" data-label="Stock on phone" data-phone="1" data-why="<b>Pattern: phone layout.</b> Sidebar becomes a drawer, the table becomes stacked cards (the data-collapse rule in components.css), actions stack full width. Phones get look-up and picking; POS stays on tablet and desktop in V1.">
+<div class="ui-content">
+  <div class="ui-page-header"><h1 class="ui-h1">Stock</h1><div class="ui-actions"><button class="ui-btn ui-btn--block" type="button">Scan to look up</button></div></div>
+  <div class="ui-panel">
+    <div class="ui-toolbar"><input class="ui-input ui-search" placeholder="Search or scan" aria-label="Search stock"><button class="ui-chip" type="button" aria-pressed="true">Low only</button></div>
+    <table class="ui-table" data-collapse><thead><tr><th scope="col">Item</th><th scope="col">Location</th><th scope="col" class="ui-qty">On hand</th><th scope="col" class="ui-qty">Available</th></tr></thead><tbody>
+      <tr data-tone="warning"><td data-primary><div><div class="ui-cell-title">Leather Sandal · 8</div><div class="ui-cell-sub ui-code">SAN-TAN-8</div></div></td><td data-label="Location">Shop floor</td><td data-label="On hand" class="ui-qty">4</td><td data-label="Available" class="ui-qty">3 <span class="ui-badge ui-badge--warning">Low</span></td></tr>
+      <tr data-tone="danger"><td data-primary><div><div class="ui-cell-title">Brass Diya Set</div><div class="ui-cell-sub ui-code">DIY-BR-04</div></div></td><td data-label="Location">Shop floor</td><td data-label="On hand" class="ui-qty">0</td><td data-label="Available" class="ui-qty">0 <span class="ui-badge ui-badge--danger">Out</span></td></tr>
+      <tr><td data-primary><div><div class="ui-cell-title">Cotton Kurta · XL</div><div class="ui-cell-sub ui-code">KUR-IND-XL</div></div></td><td data-label="Location">Back room</td><td data-label="On hand" class="ui-qty">4</td><td data-label="Available" class="ui-qty">4 <span class="ui-badge ui-badge--warning">Low</span></td></tr>
+    </tbody></table>
+  </div>
+</div>
+</template>
+
+  </div>
+</div>
+</div>
+
+<script src="https://unpkg.com/lucide@0.400.0/dist/umd/lucide.min.js"></script>
+<script>
+(function(){
+  var NAV=[['Overview',[['Dashboard','layout-dashboard']]],['Sell',[['POS','scan-barcode'],['Orders','shopping-bag'],['Fulfilment','package-check'],['Returns','undo-2'],['Invoices','receipt-indian-rupee']]],['Inventory',[['Products','tag'],['Stock','boxes'],['Stocktakes','clipboard-check'],['Purchasing','truck'],['Suppliers','factory']]],['Insights',[['Reports','chart-column'],['WooCommerce Sync','refresh-cw']]],['Management',[['Team','users'],['Settings','settings'],['Audit log','scroll-text']]]];
+  var COUNTS={'Orders':2,'Fulfilment':6};
+  function side(active){
+    var h='<aside class="ui-sidebar"><div class="ui-brand"><svg width="28" height="28" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="8" fill="var(--brand-ink)"/><path d="M9 15h22M20 15v15M15 30h10" stroke="var(--text-on-brand)" stroke-width="3" stroke-linecap="round"/><circle cx="20" cy="11" r="3.5" fill="var(--brand-marigold)"/></svg><span class="ui-brand-name">TRIDENT</span></div>';
+    NAV.forEach(function(g){h+='<nav class="ui-nav-group" aria-label="'+g[0]+'"><span class="ui-eyebrow">'+g[0]+'</span>';g[1].forEach(function(i){h+='<a class="ui-nav-link" href="#"'+(i[0]===active?' aria-current="page"':'')+'><i data-lucide="'+i[1]+'"></i><span class="ui-nav-label">'+i[0]+'</span>'+(COUNTS[i[0]]?'<span class="ui-count">'+COUNTS[i[0]]+'</span>':'')+'</a>'});h+='</nav>'});
+    return h+'</aside>';
+  }
+  var top='<header class="ui-topbar"><input class="ui-input" style="max-width:440px" placeholder="Search products, orders, invoices or scan" aria-label="Global search"><span class="ui-kbd">/</span><span class="ui-caption" style="margin-left:auto">Sutra Retail · Priya (Owner)</span></header>';
+  var phoneTop='<header class="ui-topbar"><button class="ui-btn ui-btn--ghost ui-btn--icon" type="button" aria-label="Open menu"><i data-lucide="menu"></i></button><b>TRIDENT</b><span class="ui-caption" style="margin-left:auto">Priya</span></header>';
+  var stage=document.getElementById('stage'),picker=document.getElementById('picker'),why=document.getElementById('why');
+  var tpls=[].slice.call(stage.querySelectorAll('template')),frames={};
+  tpls.forEach(function(t){
+    var f=document.createElement('div');f.className='frame'+(t.dataset.phone?' phone':'');f.hidden=true;
+    var inner=t.innerHTML;
+    if(t.dataset.phone) f.innerHTML='<div class="ui-main">'+phoneTop+inner+'</div>';
+    else f.innerHTML='<div class="ui-shell'+(t.dataset.focus?' ui-shell--focus':'')+'">'+side(t.dataset.nav)+'<main class="ui-main">'+(t.dataset.focus?'':top)+inner+'</main></div>';
+    stage.appendChild(f);frames[t.dataset.id]=f;
+    var b=document.createElement('button');b.type='button';b.setAttribute('role','tab');b.textContent=t.dataset.label;b.dataset.id=t.dataset.id;b.onclick=function(){show(t.dataset.id);try{history.replaceState(null,'','#'+t.dataset.id)}catch(e){}};picker.appendChild(b);
+  });
+  function show(id){
+    Object.keys(frames).forEach(function(k){frames[k].hidden=k!==id});
+    [].forEach.call(picker.children,function(b){b.setAttribute('aria-selected',b.dataset.id===id)});
+    var t=tpls.filter(function(x){return x.dataset.id===id})[0];why.innerHTML=t.dataset.why;
+    try{localStorage.setItem('tz-screen',id)}catch(e){}
+  }
+  var start=location.hash.slice(1);if(!frames[start]){try{start=localStorage.getItem('tz-screen')}catch(e){start=null}}
+  show(frames[start]?start:'dashboard');
+  if(window.lucide) lucide.createIcons({attrs:{'aria-hidden':'true'}});
+  stage.addEventListener('click',function(e){
+    var tab=e.target.closest('.ui-tab');if(tab){tab.parentNode.querySelectorAll('.ui-tab').forEach(function(x){x.setAttribute('aria-selected',x===tab)})}
+    var seg=e.target.closest('.ui-segmented button');if(seg){seg.parentNode.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x===seg)})}
+    var chip=e.target.closest('.ui-chip');if(chip){chip.setAttribute('aria-pressed',chip.getAttribute('aria-pressed')!=='true')}
+    if(e.target.closest('a[href="#"]'))e.preventDefault();
+  });
+})();
+</script>

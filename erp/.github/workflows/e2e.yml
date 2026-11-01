@@ -1,0 +1,36 @@
+name: e2e
+# B7: browser tests against STAGING after each successful staging deploy, or by hand. Never point this at
+# production: it signs up test stores. Set in the repository (Settings > Secrets and variables > Actions):
+#   variable E2E_BASE_URL (e.g. https://staging.example.com)
+#   secrets  E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_ADMIN_TOTP_SECRET (a console account that exists only on staging)
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [deploy]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency: { group: e2e, cancel-in-progress: false }
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    if: ${{ vars.E2E_BASE_URL != '' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
+    defaults: { run: { working-directory: tests/e2e } }
+    env:
+      E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_ADMIN_TOTP_SECRET: ${{ secrets.E2E_ADMIN_TOTP_SECRET }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: playwright-report, path: tests/e2e/playwright-report, retention-days: 7 }

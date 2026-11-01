@@ -1,0 +1,27 @@
+name: zap
+# B7: weekly OWASP ZAP baseline scan of STAGING (passive: it crawls and reads responses, it does not attack).
+# Uses the same E2E_BASE_URL variable as e2e.yml. Findings go in the job log and the uploaded report; read the report
+# each week. Warnings do not fail the job. To make a rule fail it, or to silence an accepted one, list it in
+# .zap/rules.tsv (rule id, FAIL or IGNORE, reason).
+on:
+  workflow_dispatch:
+  schedule: [{ cron: '30 21 * * 0' }]   # Mondays 03:00 IST
+permissions:
+  contents: read
+jobs:
+  zap:
+    runs-on: ubuntu-latest
+    if: ${{ vars.E2E_BASE_URL != '' }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with: { persist-credentials: false }
+      - name: Baseline scan
+        run: |
+          mkdir -p zap-out && chmod 777 zap-out
+          rules=""; [ -f .zap/rules.tsv ] && cp .zap/rules.tsv zap-out/ && rules="-c rules.tsv"
+          docker run --rm -v "$PWD/zap-out:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:2.16.1@sha256:7840969c7c9fead565bf9734b12f49f6886db90b1d35b1f74d79710bbd081dab \
+            zap-baseline.py -t "${{ vars.E2E_BASE_URL }}" -r report.html -I $rules
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: zap-report, path: zap-out/report.html, retention-days: 30 }

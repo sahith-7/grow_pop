@@ -1,0 +1,68 @@
+name: deploy
+# B7 (D78): merge to main deploys staging; a tag vX.Y.Z deploys production after a required reviewer approves the
+# "production" environment (Settings > Environments). No AWS keys are stored in GitHub: the job signs in to AWS
+# with a short-lived OIDC token, and the role trusts only this repository's main branch and v* tags.
+# Variables on each environment: AWS_DEPLOY_ROLE_ARN, ECR_REGISTRY, DEPLOY_BUCKET, INSTANCE_ID; repository variable
+# DEPLOY_ENABLED=true turns the workflow on.
+# One-time AWS setup: docs/runbooks/production-setup.md.
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: deploy-${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Off until AWS is set up: set the repository variable DEPLOY_ENABLED to true (Settings > Secrets and variables).
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: ${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'staging' }}
+    env:
+      ENV_NAME: ${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'staging' }}
+      TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.sha }}
+      ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with: { persist-credentials: false }
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-south-1
+      - name: Build and push images
+        run: |
+          # Tags are immutable in ECR. Re-running an old release's deploy (rollback.md) re-deploys its existing images.
+          if aws ecr describe-images --repository-name erp-api --image-ids imageTag="$TAG" >/dev/null 2>&1 &&
+             aws ecr describe-images --repository-name erp-web --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+            echo "images for $TAG already in ECR; deploying them"; exit 0
+          fi
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          docker build -f apps/api/Dockerfile -t "$ECR_REGISTRY/erp-api:$TAG" .
+          docker build -f apps/web/Dockerfile --build-arg API_URL=http://api:4000 -t "$ECR_REGISTRY/erp-web:$TAG" .
+          docker push "$ECR_REGISTRY/erp-api:$TAG"
+          docker push "$ECR_REGISTRY/erp-web:$TAG"
+      - name: Deploy on the server
+        env:
+          BUCKET: ${{ vars.DEPLOY_BUCKET }}
+          INSTANCE: ${{ vars.INSTANCE_ID }}
+        run: |
+          aws s3 cp docker-compose.prod.yml "s3://$BUCKET/$TAG/docker-compose.prod.yml"
+          aws s3 cp ops/deploy.sh "s3://$BUCKET/$TAG/deploy.sh"
+          cmd=$(aws ssm send-command --instance-ids "$INSTANCE" --document-name AWS-RunShellScript \
+            --timeout-seconds 900 --comment "deploy $TAG" \
+            --parameters "commands=[\"set -e\",\"cd /opt/erp\",\"aws s3 cp s3://$BUCKET/$TAG/docker-compose.prod.yml .\",\"aws s3 cp s3://$BUCKET/$TAG/deploy.sh .\",\"sh deploy.sh $ENV_NAME $TAG $ECR_REGISTRY\"]" \
+            --query Command.CommandId --output text)
+          for i in $(seq 1 90); do   # up to 15 minutes
+            sleep 10
+            status=$(aws ssm get-command-invocation --command-id "$cmd" --instance-id "$INSTANCE" --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Pending|InProgress|Delayed) ;; *) break ;; esac
+          done
+          aws ssm get-command-invocation --command-id "$cmd" --instance-id "$INSTANCE" \
+            --query '[StandardOutputContent, StandardErrorContent]' --output text
+          echo "result: $status"
+          [ "$status" = Success ]

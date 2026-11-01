@@ -1,0 +1,451 @@
+<title>Retail ERP Wireframes</title>
+<style>
+/* Layout: screen picker on top, one desktop-width app frame below (sidebar + top bar + content), scrolls inside its own box on small screens.
+   Colours and font are copied exactly from the PRD's apps/web/src/styles/tokens.css. VasyERP's own palette is not stated in any source document (PRD D1: "undecided"). */
+:root{
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --color-bg:#f7f8fa; --color-surface:#ffffff; --color-border:#e3e6eb;
+  --color-text:#1b1f27; --color-text-muted:#5b6472;
+  --color-primary:#2f5bea;
+  --color-success:#1e8e3e; --color-warning:#b26a00; --color-danger:#c5221f; --color-info:#1a73e8;
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-6:24px; --space-8:32px;
+  --radius-sm:6px; --radius-md:10px;
+  --focus-ring:0 0 0 3px rgba(47,91,234,.35);
+  /* derived only for wireframe chrome */
+  --primary-soft:#e9eefd; --row-alt:#fafbfc; --sidebar:#ffffff;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--color-bg);color:var(--color-text);font-family:var(--font-sans);font-size:14px;padding-inline:16px;padding-block:24px 48px;margin:0}
+.wrap{max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:var(--space-4)}
+header.doc h1{font-size:22px;margin:0 0 4px;text-wrap:balance}
+header.doc p{margin:0;color:var(--color-text-muted);max-width:75ch;line-height:1.5}
+.picker{display:flex;flex-wrap:wrap;gap:6px}
+.picker button{font:inherit;font-size:13px;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);padding:6px 10px;border-radius:var(--radius-sm);cursor:pointer}
+.picker button[aria-selected="true"]{background:var(--color-primary);border-color:var(--color-primary);color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.note{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);color:var(--color-text-muted);line-height:1.5}
+.note b{color:var(--color-text)}
+.stage{overflow-x:auto;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface)}
+/* ---------- app frame ---------- */
+.app{display:grid;grid-template-columns:216px 1fr;min-width:1100px;min-height:640px}
+.app.full{grid-template-columns:1fr}
+.app.full .side{display:none}
+.side{background:var(--sidebar);border-right:1px solid var(--color-border);padding:var(--space-4) var(--space-3);display:flex;flex-direction:column;gap:var(--space-4)}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;padding:0 6px}
+.brand i{width:26px;height:26px;border-radius:6px;background:var(--color-primary);display:inline-block}
+.grp h6{margin:0 0 4px 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--color-text-muted);font-weight:600}
+.grp a{display:block;padding:6px 8px;border-radius:var(--radius-sm);color:var(--color-text);text-decoration:none;font-size:13px}
+.grp a.on{background:var(--primary-soft);color:var(--color-primary);font-weight:600}
+.main{display:flex;flex-direction:column;min-width:0}
+.top{display:flex;align-items:center;gap:var(--space-3);padding:10px var(--space-6);border-bottom:1px solid var(--color-border)}
+.search{flex:1;max-width:460px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:7px 10px;color:var(--color-text-muted);background:var(--color-bg)}
+.top .who{margin-left:auto;color:var(--color-text-muted);font-size:13px}
+.content{padding:var(--space-6);display:flex;flex-direction:column;gap:var(--space-4)}
+.ph{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap}
+.ph h2{margin:0;font-size:20px}
+.ph .sub{color:var(--color-text-muted)}
+.ph .act{margin-left:auto;display:flex;gap:8px}
+.btn{font:inherit;font-size:13px;padding:7px 12px;border-radius:var(--radius-sm);border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);white-space:nowrap}
+.btn.p{background:var(--color-primary);border-color:var(--color-primary);color:#fff}
+.btn.d{color:var(--color-danger)}
+.btn.lg{padding:12px 18px;font-size:15px;font-weight:600}
+.panel{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md)}
+.panel>h3{margin:0;padding:12px 16px;border-bottom:1px solid var(--color-border);font-size:14px;display:flex;gap:8px;align-items:center}
+.panel>h3 small{margin-left:auto;font-weight:400;color:var(--color-text-muted)}
+.pb{padding:16px}
+.grid{display:grid;gap:var(--space-4);align-content:start}
+.g4{grid-template-columns:repeat(4,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:1fr 1fr} .g21{grid-template-columns:2fr 1fr} .g12{grid-template-columns:1fr 360px}
+.kpi{padding:14px 16px}
+.kpi .l{color:var(--color-text-muted);font-size:12px}
+.kpi .v{font-size:24px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
+.kpi .t{font-size:12px;margin-top:2px}
+.up{color:var(--color-success)} .down{color:var(--color-danger)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.f{border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:6px 10px;background:var(--color-surface);color:var(--color-text-muted);font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--color-text-muted);font-size:12px;padding:8px 12px;border-bottom:1px solid var(--color-border);background:var(--row-alt)}
+td{padding:9px 12px;border-bottom:1px solid var(--color-border);vertical-align:middle}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+.muted{color:var(--color-text-muted)}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid currentColor;white-space:nowrap}
+.s-ok{color:var(--color-success)} .s-warn{color:var(--color-warning)} .s-bad{color:var(--color-danger)} .s-info{color:var(--color-info)} .s-mut{color:var(--color-text-muted)}
+.thumb{width:32px;height:32px;border-radius:4px;background:repeating-linear-gradient(45deg,var(--color-border) 0 4px,var(--color-bg) 4px 8px);display:inline-block;vertical-align:middle}
+.box{border:1px dashed var(--color-border);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;color:var(--color-text-muted);font-size:12px;background:var(--color-bg)}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:12px;color:var(--color-text-muted);font-weight:600}
+.input{border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:8px 10px;min-height:34px;background:var(--color-surface)}
+.input.err{border-color:var(--color-danger)}
+.errtxt{font-size:12px;color:var(--color-danger)}
+.scan{border:2px solid var(--color-primary);border-radius:var(--radius-md);padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:15px;color:var(--color-text-muted);background:var(--color-surface)}
+.scan b{color:var(--color-primary);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.alert{padding:10px 14px;border-radius:var(--radius-sm);border:1px solid;font-size:13px;display:flex;gap:10px;align-items:center}
+.alert.warn{color:var(--color-warning);background:#fff8ec}
+.alert.bad{color:var(--color-danger);background:#fdf0ef}
+.alert.ok{color:var(--color-success);background:#eef8f1}
+.alert.info{color:var(--color-info);background:#edf4fe}
+.alert span{color:var(--color-text)}
+.list{display:flex;flex-direction:column}
+.list .r{display:flex;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1px solid var(--color-border)}
+.list .r:last-child{border-bottom:0}
+.steps{display:flex;gap:0;flex-wrap:wrap}
+.steps span{padding:6px 12px;font-size:12px;border:1px solid var(--color-border);margin-right:-1px;color:var(--color-text-muted);background:var(--color-surface)}
+.steps span.on{background:var(--primary-soft);color:var(--color-primary);font-weight:600}
+.steps span.done{color:var(--color-success)}
+.total{display:flex;justify-content:space-between;padding:6px 0;font-variant-numeric:tabular-nums}
+.total.big{font-size:22px;font-weight:700;border-top:1px solid var(--color-border);padding-top:10px;margin-top:4px}
+.paybtns{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tl{display:flex;flex-direction:column;gap:10px;font-size:13px}
+.tl div{display:grid;grid-template-columns:120px 1fr;gap:10px}
+.anno{font-size:12px;color:var(--color-info);border-left:2px solid var(--color-info);padding-left:8px}
+.inv{max-width:820px;margin:0 auto;border:1px solid var(--color-border);padding:28px;background:var(--color-surface)}
+.inv h4{margin:0}
+@media (max-width:640px){header.doc h1{font-size:19px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="doc">
+    <h1>Retail ERP · main screen wireframes</h1>
+    <p>Twelve screens from the PRD handoff checklist (section 19). Layout follows PRD section 12: permission-aware left sidebar, top bar with global search and scan, content area. POS and Pick &amp; pack run full-screen for counter use. All data shown is example data.</p>
+  </header>
+  <div class="note"><b>Colours and font.</b> No source document states VasyERP's palette or typeface; the PRD lists both as undecided (decision D1). These wireframes use the PRD's own <span class="mono">tokens.css</span> values exactly: primary #2f5bea, background #f7f8fa, text #1b1f27, status green/amber/red/blue, and the system UI font stack. Swapping to a final brand means editing that one file.</div>
+  <div class="picker" role="tablist" aria-label="Screens" id="picker"></div>
+  <div class="stage" id="stage">
+
+<!-- 1 DASHBOARD -->
+<section class="screen" id="dashboard" data-nav="Dashboard" data-label="Dashboard">
+ <div class="content">
+  <div class="ph"><h2>Good morning, Priya</h2><span class="sub">Mon 12 Oct 2026 · Shop floor + website</span><div class="act"><button class="btn">Receive stock</button><button class="btn">New product</button><button class="btn p">Open POS</button></div></div>
+  <div class="grid g4">
+   <div class="panel kpi"><div class="l">Sales today</div><div class="v">₹48,920</div><div class="t up">▲ 12% vs yesterday · 37 orders</div></div>
+   <div class="panel kpi"><div class="l">Stock value (at cost)</div><div class="v">₹18.4 L</div><div class="t muted">1,284 active SKUs</div></div>
+   <div class="panel kpi"><div class="l">Low stock</div><div class="v">23</div><div class="t s-warn">below reorder level</div></div>
+   <div class="panel kpi"><div class="l">Website sync</div><div class="v s-ok" style="font-size:18px">Healthy</div><div class="t muted">last push 8 s ago · 0 failed</div></div>
+  </div>
+  <div class="grid g21">
+   <div class="panel"><h3>Needs attention <small>tap to open the filtered list</small></h3>
+    <div class="list">
+     <div class="r"><span><span class="pill s-bad">Stock exception</span>&nbsp; 2 paid web orders could not reserve stock</span><a class="muted">Review →</a></div>
+     <div class="r"><span><span class="pill s-info">Ready to pick</span>&nbsp; 6 web orders, oldest paid 3 h ago</span><a class="muted">Pick →</a></div>
+     <div class="r"><span><span class="pill s-warn">Approval</span>&nbsp; Stocktake ST-0012 (Back room) waiting for review</span><a class="muted">Review →</a></div>
+     <div class="r"><span><span class="pill s-warn">Sync</span>&nbsp; 1 image failed to upload to the website</span><a class="muted">Fix →</a></div>
+    </div></div>
+   <div class="panel"><h3>Best sellers · 7 days</h3>
+    <div class="list">
+     <div class="r"><span>Cotton Kurta · Indigo · M</span><b>42</b></div>
+     <div class="r"><span>Leather Sandal · Tan · 8</span><b>31</b></div>
+     <div class="r"><span>Steel Bottle 1 L</span><b>28</b></div>
+     <div class="r"><span>Silk Dupatta · Maroon</span><b>19</b></div>
+    </div></div>
+  </div>
+  <div class="panel"><h3>Recent sales</h3>
+   <table><tr><th>Order</th><th>Channel</th><th>Customer</th><th>Status</th><th class="n">Total</th><th>Time</th></tr>
+    <tr><td class="mono">SO-10482</td><td>POS</td><td>Walk-in</td><td><span class="pill s-ok">Completed</span></td><td class="n">₹1,298.00</td><td class="muted">10:42</td></tr>
+    <tr><td class="mono">WC-8831</td><td>Website</td><td>Ananya R.</td><td><span class="pill s-info">Ready to pick</span></td><td class="n">₹2,450.00</td><td class="muted">10:31</td></tr>
+    <tr><td class="mono">WC-8830</td><td>Website</td><td>Rahul M.</td><td><span class="pill s-mut">Awaiting payment</span></td><td class="n">₹899.00</td><td class="muted">10:18</td></tr>
+   </table></div>
+ </div>
+</section>
+
+<!-- 2 PRODUCTS LIST -->
+<section class="screen" id="products" data-nav="Products" data-label="Products">
+ <div class="content">
+  <div class="ph"><h2>Products</h2><span class="sub">1,284 active</span><div class="act"><button class="btn">Import CSV</button><button class="btn">Export</button><button class="btn">Print labels</button><button class="btn p">New product</button></div></div>
+  <div class="filters"><div class="f" style="min-width:300px">Search name, SKU or scan barcode…</div><div class="f">Status: Active ▾</div><div class="f">Category ▾</div><div class="f">Brand ▾</div><div class="f">Website: Any ▾</div></div>
+  <div class="panel"><table>
+   <tr><th style="width:28px"><input type="checkbox" aria-label="Select all" id="pl-all"></th><th></th><th>Product</th><th>SKU</th><th>Category</th><th class="n">Variants</th><th class="n">Price</th><th class="n">Available</th><th>Website</th></tr>
+   <tr><td><input type="checkbox" aria-label="Select" id="pl1"></td><td><span class="thumb"></span></td><td><b>Cotton Kurta</b><div class="muted">Sutra Handloom</div></td><td class="mono">KUR-IND-*</td><td>Apparel › Kurtas</td><td class="n">4</td><td class="n">₹899–₹999</td><td class="n">38</td><td><span class="pill s-ok">Synced</span></td></tr>
+   <tr><td><input type="checkbox" aria-label="Select" id="pl2"></td><td><span class="thumb"></span></td><td><b>Leather Sandal</b><div class="muted">Kolhapuri Co.</div></td><td class="mono">SAN-TAN-*</td><td>Footwear</td><td class="n">6</td><td class="n">₹1,299</td><td class="n s-warn">4</td><td><span class="pill s-ok">Synced</span></td></tr>
+   <tr><td><input type="checkbox" aria-label="Select" id="pl3"></td><td><span class="thumb"></span></td><td><b>Steel Bottle 1 L</b><div class="muted">Hydra</div></td><td class="mono">BTL-1000</td><td>Home</td><td class="n">1</td><td class="n">₹549</td><td class="n">112</td><td><span class="pill s-warn">Queued</span></td></tr>
+   <tr><td><input type="checkbox" aria-label="Select" id="pl4"></td><td><span class="thumb"></span></td><td><b>Silk Dupatta</b><div class="muted">Sutra Handloom</div></td><td class="mono">DUP-SLK-*</td><td>Apparel › Dupattas</td><td class="n">3</td><td class="n">₹1,450</td><td class="n">17</td><td><span class="pill s-bad">Failed</span></td></tr>
+   <tr><td><input type="checkbox" aria-label="Select" id="pl5"></td><td><span class="thumb"></span></td><td><b>Brass Diya Set</b><div class="muted">—</div></td><td class="mono">DIY-BR-04</td><td>Home › Pooja</td><td class="n">1</td><td class="n">₹699</td><td class="n">0</td><td><span class="pill s-mut">Draft</span></td></tr>
+  </table></div>
+  <div class="anno">Cashier sees this list without cost columns and without the Import/Export buttons (no product.write / report.export). "Available" = sellable on-hand minus active reservations.</div>
+ </div>
+</section>
+
+<!-- 3 PRODUCT EDITOR -->
+<section class="screen" id="product" data-nav="Products" data-label="Product editor">
+ <div class="content">
+  <div class="ph"><h2>Cotton Kurta</h2><span class="pill s-ok">Active</span><span class="pill s-ok">Website: synced 2 min ago</span><div class="act"><button class="btn">Archive</button><button class="btn">Publish now</button><button class="btn p">Save</button></div></div>
+  <div class="grid g12">
+   <div class="grid">
+    <div class="panel"><h3>Details</h3><div class="pb grid g2">
+     <div class="field"><label>Name</label><div class="input">Cotton Kurta</div></div>
+     <div class="field"><label>Category</label><div class="input">Apparel › Kurtas ▾</div></div>
+     <div class="field"><label>Brand</label><div class="input">Sutra Handloom ▾</div></div>
+     <div class="field"><label>Unit</label><div class="input">Piece (pcs) ▾</div></div>
+     <div class="field"><label>HSN code</label><div class="input mono">62114200</div></div>
+     <div class="field"><label>GST rate</label><div class="input">5% ▾</div></div>
+    </div></div>
+    <div class="panel"><h3>Variants <small>Attributes: Size (S, M, L, XL) · Colour (Indigo)</small></h3>
+     <table><tr><th>Variant</th><th>SKU</th><th>Barcode</th><th class="n">Price</th><th class="n">MRP</th><th class="n">Cost</th><th class="n">Reorder at</th><th class="n">On hand</th></tr>
+      <tr><td>S · Indigo</td><td class="mono">KUR-IND-S</td><td class="mono">2000000012347</td><td class="n">₹899</td><td class="n">₹1,199</td><td class="n">₹410</td><td class="n">5</td><td class="n">9</td></tr>
+      <tr><td>M · Indigo</td><td class="mono">KUR-IND-M</td><td class="mono">2000000012354</td><td class="n">₹899</td><td class="n">₹1,199</td><td class="n">₹410</td><td class="n">5</td><td class="n">14</td></tr>
+      <tr><td>L · Indigo</td><td><div class="input err mono" style="min-height:0;padding:4px 6px">KUR-IND-M</div><div class="errtxt">SKU already used by M · Indigo</div></td><td class="mono muted">Generate · Scan</td><td class="n">₹949</td><td class="n">₹1,249</td><td class="n">₹430</td><td class="n">5</td><td class="n">11</td></tr>
+      <tr><td>XL · Indigo</td><td class="mono">KUR-IND-XL</td><td class="mono">8901234567892</td><td class="n">₹999</td><td class="n">₹1,299</td><td class="n">₹450</td><td class="n">3</td><td class="n">4</td></tr>
+     </table></div>
+   </div>
+   <div class="grid">
+    <div class="panel"><h3>Images <small>drag to reorder</small></h3><div class="pb grid g2">
+     <div class="box" style="height:120px;border-style:solid;border-color:var(--color-primary)">Primary · synced</div>
+     <div class="box" style="height:120px">Image 2 · synced</div>
+     <div class="box" style="height:120px;color:var(--color-danger);border-color:var(--color-danger)">Image 3 · upload to website failed · Retry</div>
+     <div class="box" style="height:120px">+ Add images<br>JPG, PNG, WebP · 5 MB</div>
+    </div></div>
+    <div class="panel"><h3>Website</h3><div class="pb" style="display:flex;flex-direction:column;gap:8px">
+     <div>☑ Publish to website</div><div class="muted">Woo product #4812 · 4 variations linked</div><div class="muted">Stock sent: available qty per variant</div>
+    </div></div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- 4 STOCK -->
+<section class="screen" id="stock" data-nav="Stock" data-label="Stock">
+ <div class="content">
+  <div class="ph"><h2>Stock</h2><div class="act"><button class="btn">Transfer</button><button class="btn">Adjust / write off</button><button class="btn">Movement history</button></div></div>
+  <div class="filters"><div class="f" style="min-width:280px">Search or scan…</div><div class="f">Location: All ▾</div><div class="f">☐ Low stock only</div></div>
+  <div class="panel"><table>
+   <tr><th>SKU</th><th>Product</th><th>Location</th><th class="n">On hand</th><th class="n">Reserved</th><th class="n">Available</th><th class="n">Non-sellable</th><th class="n">Value</th><th></th></tr>
+   <tr><td class="mono">KUR-IND-M</td><td>Cotton Kurta · M</td><td>Shop floor</td><td class="n">14</td><td class="n">2</td><td class="n"><b>12</b></td><td class="n">0</td><td class="n">₹5,740</td><td class="muted">⋯</td></tr>
+   <tr><td class="mono">KUR-IND-M</td><td>Cotton Kurta · M</td><td>Back room</td><td class="n">20</td><td class="n">0</td><td class="n"><b>20</b></td><td class="n">1</td><td class="n">₹8,200</td><td class="muted">⋯</td></tr>
+   <tr><td class="mono">SAN-TAN-8</td><td>Leather Sandal · 8</td><td>Shop floor</td><td class="n">4</td><td class="n">1</td><td class="n s-warn"><b>3</b></td><td class="n">0</td><td class="n">₹2,640</td><td class="muted">⋯</td></tr>
+   <tr><td class="mono">DIY-BR-04</td><td>Brass Diya Set</td><td>Shop floor</td><td class="n">0</td><td class="n">0</td><td class="n s-bad"><b>0</b></td><td class="n">2</td><td class="n">₹0</td><td class="muted">⋯</td></tr>
+  </table></div>
+  <div class="grid g2">
+   <div class="panel"><h3>Adjust stock · Cotton Kurta · M</h3><div class="pb grid g2">
+    <div class="field"><label>Location</label><div class="input">Shop floor ▾</div></div>
+    <div class="field"><label>Reason (required)</label><div class="input">Damage ▾</div></div>
+    <div class="field"><label>Quantity change</label><div class="input">−1</div></div>
+    <div class="field"><label>Result</label><div class="input muted">On hand 14 → 13 · available 11</div></div>
+    <div class="field" style="grid-column:1/-1"><label>Note</label><div class="input">Stitching torn at hem</div></div>
+    <div style="grid-column:1/-1;display:flex;gap:8px;justify-content:flex-end"><button class="btn">Cancel</button><button class="btn p">Post adjustment</button></div>
+   </div></div>
+   <div class="panel"><h3>Movement history · KUR-IND-M</h3><table>
+    <tr><th>When</th><th>Type</th><th class="n">Qty</th><th class="n">After</th><th>Ref</th><th>By</th></tr>
+    <tr><td class="muted">12 Oct 10:42</td><td>Sale</td><td class="n">−1</td><td class="n">14</td><td class="mono">INV/26-27/0482</td><td>Ravi</td></tr>
+    <tr><td class="muted">11 Oct 16:05</td><td>Receipt</td><td class="n">+10</td><td class="n">15</td><td class="mono">GRN-0091</td><td>Meena</td></tr>
+    <tr><td class="muted">10 Oct 18:20</td><td>Dispatch</td><td class="n">−2</td><td class="n">5</td><td class="mono">WC-8790</td><td>Arjun</td></tr>
+    <tr><td class="muted">09 Oct 11:02</td><td>Adjustment · loss</td><td class="n">−1</td><td class="n">7</td><td class="mono">ADJ-0031</td><td>Priya</td></tr>
+   </table></div>
+  </div>
+ </div>
+</section>
+
+<!-- 5 RECEIVE PO -->
+<section class="screen" id="receive" data-nav="Purchasing" data-label="Receive PO">
+ <div class="content">
+  <div class="ph"><h2>Receive · PO-0217</h2><span class="pill s-info">Submitted</span><span class="sub">Sutra Handloom · expected 12 Oct</span><div class="act"><button class="btn">Save draft</button><button class="btn p">Post receipt</button></div></div>
+  <div class="grid g12">
+   <div class="grid">
+    <div class="scan"><b>Scan</b> Scan items as you unpack; each scan adds 1 to the matching line</div>
+    <div class="panel"><table>
+     <tr><th>SKU</th><th>Item</th><th class="n">Ordered</th><th class="n">Prev. received</th><th class="n">Received now</th><th class="n">Accepted</th><th class="n">Damaged</th><th class="n">Still due</th><th>Put in</th></tr>
+     <tr><td class="mono">KUR-IND-M</td><td>Cotton Kurta · M</td><td class="n">10</td><td class="n">0</td><td class="n"><b>8</b></td><td class="n">8</td><td class="n">0</td><td class="n s-warn">2</td><td>Back room ▾</td></tr>
+     <tr><td class="mono">KUR-IND-L</td><td>Cotton Kurta · L</td><td class="n">10</td><td class="n">0</td><td class="n"><b>10</b></td><td class="n">9</td><td class="n s-bad">1</td><td class="n">0</td><td>Back room ▾</td></tr>
+     <tr><td class="mono">DUP-SLK-MR</td><td>Silk Dupatta · Maroon</td><td class="n">6</td><td class="n">6</td><td class="n muted">—</td><td class="n muted">—</td><td class="n muted">—</td><td class="n">0</td><td class="muted">done</td></tr>
+    </table></div>
+    <div class="alert warn">Unknown code <b class="mono">&nbsp;8906011234567&nbsp;</b><span>is not in your catalog.</span><button class="btn" style="margin-left:auto">Link to existing variant</button><button class="btn">Create product</button></div>
+   </div>
+   <div class="panel"><h3>On posting</h3><div class="pb" style="display:flex;flex-direction:column;gap:8px">
+    <div class="total"><span>Sellable stock in</span><b>+17</b></div>
+    <div class="total"><span>Non-sellable (damaged)</span><b>+1</b></div>
+    <div class="total"><span>PO status after</span><span class="pill s-warn">Partial · 2 due</span></div>
+    <div class="field"><label>Supplier invoice no.</label><div class="input mono">SH/2026/1187</div></div>
+    <div class="anno">AC-05: receive 8 of 10 → sellable +8, outstanding 2.</div>
+   </div></div>
+  </div>
+ </div>
+</section>
+
+<!-- 6 STOCKTAKE -->
+<section class="screen" id="stocktake" data-nav="Stocktakes" data-label="Stocktake review">
+ <div class="content">
+  <div class="ph"><h2>Stocktake ST-0012 · Back room</h2><span class="pill s-warn">In review</span><span class="sub">Snapshot 11 Oct 19:00 · counted by Meena · 212 of 212 lines</span><div class="act"><button class="btn">Send back to counting</button><button class="btn p">Approve and post 5 variances</button></div></div>
+  <div class="steps"><span class="done">✓ Counting</span><span class="on">Review</span><span>Posted</span></div>
+  <div class="filters"><div class="f">Show: Variances only ▾</div><div class="f">Sort: Value ▾</div></div>
+  <div class="panel"><table>
+   <tr><th>SKU</th><th>Item</th><th class="n">Expected</th><th class="n">Moved during count</th><th class="n">Counted</th><th class="n">Variance</th><th class="n">Value</th></tr>
+   <tr><td class="mono">SAN-TAN-9</td><td>Leather Sandal · 9</td><td class="n">12</td><td class="n">−1</td><td class="n">9</td><td class="n s-bad">−2</td><td class="n s-bad">−₹1,320</td></tr>
+   <tr><td class="mono">DUP-SLK-MR</td><td>Silk Dupatta · Maroon</td><td class="n">8</td><td class="n">0</td><td class="n">7</td><td class="n s-bad">−1</td><td class="n s-bad">−₹690</td></tr>
+   <tr><td class="mono">BTL-1000</td><td>Steel Bottle 1 L</td><td class="n">60</td><td class="n">0</td><td class="n">62</td><td class="n s-ok">+2</td><td class="n s-ok">+₹480</td></tr>
+   <tr><td class="mono">KUR-IND-S</td><td>Cotton Kurta · S</td><td class="n">5</td><td class="n">+10</td><td class="n">14</td><td class="n s-bad">−1</td><td class="n s-bad">−₹410</td></tr>
+   <tr><td class="mono">DIY-BR-04</td><td>Brass Diya Set</td><td class="n">0</td><td class="n">0</td><td class="n">1</td><td class="n s-ok">+1</td><td class="n s-ok">+₹310</td></tr>
+  </table></div>
+  <div class="anno">Variance = counted − (expected + moved during count), so sales and receipts during the count do not show as losses. Counters never see Expected (blind count). Approve needs stocktake.approve.</div>
+ </div>
+</section>
+
+<!-- 7 POS -->
+<section class="screen" id="pos" data-nav="POS" data-label="POS" data-full="1">
+ <div class="content" style="padding:16px">
+  <div class="ph"><h2>POS</h2><span class="sub">Counter 1 · Ravi</span><div class="act"><button class="btn">Hold</button><button class="btn">Returns</button><button class="btn">Exit POS</button></div></div>
+  <div class="grid g12">
+   <div class="grid">
+    <div class="scan"><b>Scan</b> Scan barcode or type name / SKU…</div>
+    <div class="panel"><table>
+     <tr><th>Item</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Disc.</th><th class="n">GST</th><th class="n">Amount</th><th></th></tr>
+     <tr><td><b>Cotton Kurta · M</b><div class="muted mono">KUR-IND-M · 12 available</div></td><td class="n">− 2 +</td><td class="n">₹899.00</td><td class="n">—</td><td class="n">5%</td><td class="n">₹1,798.00</td><td class="muted">✕</td></tr>
+     <tr><td><b>Steel Bottle 1 L</b><div class="muted mono">BTL-1000</div></td><td class="n">− 1 +</td><td class="n">₹549.00</td><td class="n">10%</td><td class="n">18%</td><td class="n">₹494.10</td><td class="muted">✕</td></tr>
+     <tr><td><b>Leather Sandal · 8</b><div class="s-bad" style="font-size:12px">Only 3 available</div></td><td class="n">− 4 +</td><td class="n">₹1,299.00</td><td class="n">—</td><td class="n">5%</td><td class="n s-bad">—</td><td class="muted">✕</td></tr>
+    </table></div>
+   </div>
+   <div class="panel"><h3>Bill <small>Customer: Walk-in · change</small></h3><div class="pb">
+    <div class="total"><span>Taxable value</span><span>₹2,131.11</span></div>
+    <div class="total muted"><span>CGST</span><span>₹80.50</span></div>
+    <div class="total muted"><span>SGST</span><span>₹80.50</span></div>
+    <div class="total muted"><span>Discount (included)</span><span>₹54.90</span></div>
+    <div class="total muted"><span>Round off</span><span>−₹0.11</span></div>
+    <div class="total big"><span>Total</span><span>₹2,292.00</span></div>
+    <div class="paybtns" style="margin:12px 0"><button class="btn">Cash</button><button class="btn p">UPI</button><button class="btn">Card</button><button class="btn">Split</button></div>
+    <div class="field"><label>UPI reference</label><div class="input mono">412345678901</div></div>
+    <button class="btn p lg" style="width:100%;margin-top:12px">Complete sale · ₹2,292.00</button>
+    <div class="anno" style="margin-top:10px">Totals come from the server. Double-tap safe (idempotency key). Discount 10% is within the cashier limit, so no reason is asked.</div>
+   </div></div>
+  </div>
+ </div>
+</section>
+
+<!-- 8 ORDERS -->
+<section class="screen" id="orders" data-nav="Orders" data-label="Orders">
+ <div class="content">
+  <div class="ph"><h2>Orders</h2></div>
+  <div class="filters"><div class="f" style="min-width:260px">Order no., Woo id or phone…</div><div class="f">Channel: All ▾</div><div class="f">Status: All ▾</div><div class="f">Payment: All ▾</div><div class="f">Last 7 days ▾</div></div>
+  <div class="panel"><table>
+   <tr><th>Order</th><th>Channel</th><th>Placed</th><th>Customer</th><th>Website status</th><th>ERP status</th><th>Payment</th><th class="n">Total</th></tr>
+   <tr><td class="mono">WC-8832</td><td>Website</td><td class="muted">12 Oct 10:40</td><td>Kavya S.</td><td class="mono muted">processing</td><td><span class="pill s-bad">Stock exception</span></td><td><span class="pill s-ok">Paid</span></td><td class="n">₹3,897.00</td></tr>
+   <tr><td class="mono">WC-8831</td><td>Website</td><td class="muted">12 Oct 10:31</td><td>Ananya R.</td><td class="mono muted">processing</td><td><span class="pill s-info">Ready to pick</span></td><td><span class="pill s-ok">Paid</span></td><td class="n">₹2,450.00</td></tr>
+   <tr><td class="mono">WC-8830</td><td>Website</td><td class="muted">12 Oct 10:18</td><td>Rahul M.</td><td class="mono muted">pending</td><td><span class="pill s-mut">Awaiting payment</span></td><td><span class="pill s-mut">Awaiting</span></td><td class="n">₹899.00</td></tr>
+   <tr><td class="mono">WC-8825</td><td>Website</td><td class="muted">11 Oct 19:02</td><td>Sameer K.</td><td class="mono muted">processing</td><td><span class="pill s-warn">Dispatched · website update pending</span></td><td><span class="pill s-ok">Paid</span></td><td class="n">₹1,299.00</td></tr>
+   <tr><td class="mono">WC-8819</td><td>Website</td><td class="muted">11 Oct 14:47</td><td>Divya P.</td><td class="mono muted">cancelled</td><td><span class="pill s-mut">Cancelled</span></td><td><span class="pill s-mut">Awaiting</span></td><td class="n">₹549.00</td></tr>
+   <tr><td class="mono">SO-10482</td><td>POS</td><td class="muted">12 Oct 10:42</td><td>Walk-in</td><td class="muted">—</td><td><span class="pill s-ok">Completed</span></td><td><span class="pill s-ok">Paid</span></td><td class="n">₹1,298.00</td></tr>
+  </table></div>
+  <div class="anno">Raw WooCommerce status is shown beside the ERP status (PRD 6.3). Pending orders hold no stock.</div>
+ </div>
+</section>
+
+<!-- 9 ORDER DETAIL -->
+<section class="screen" id="order" data-nav="Orders" data-label="Order detail">
+ <div class="content">
+  <div class="ph"><h2>WC-8832</h2><span class="pill s-bad">Stock exception</span><span class="pill s-ok">Paid · Razorpay pay_PQx81</span><div class="act"><button class="btn">Open in WooCommerce ↗</button><button class="btn p">Retry reservation</button></div></div>
+  <div class="alert bad">Payment confirmed but 1 line could not be reserved: <span>Leather Sandal · 8 needs 2, only 1 available at Shop floor. Receive stock or transfer from Back room, then retry. Cancel or refund in WooCommerce if you cannot fulfil.</span></div>
+  <div class="grid g21">
+   <div class="panel"><h3>Lines</h3><table>
+    <tr><th>SKU</th><th>Item</th><th class="n">Qty</th><th class="n">Price</th><th>Reservation</th></tr>
+    <tr><td class="mono">KUR-IND-L</td><td>Cotton Kurta · L</td><td class="n">1</td><td class="n">₹949.00</td><td><span class="pill s-ok">Reserved · Shop floor</span></td></tr>
+    <tr><td class="mono">SAN-TAN-8</td><td>Leather Sandal · 8</td><td class="n">2</td><td class="n">₹1,299.00</td><td><span class="pill s-bad">Exception</span></td></tr>
+    <tr><td class="mono">—</td><td>Gift wrap (unknown SKU <span class="mono">GW-01</span>)</td><td class="n">1</td><td class="n">₹50.00</td><td><a class="s-info">Map to product</a></td></tr>
+   </table></div>
+   <div class="panel"><h3>Customer</h3><div class="pb" style="display:flex;flex-direction:column;gap:4px">
+    <b>Kavya S.</b><span class="muted">+91 98•••• 4410</span><span>12 MG Road, Bengaluru, KA 560001</span><span class="muted">Place of supply: Karnataka (29) · inter-state</span>
+   </div></div>
+  </div>
+  <div class="panel"><h3>Timeline</h3><div class="pb tl">
+   <div><span class="muted">12 Oct 10:40:12</span><span>Imported from website · status <span class="mono">pending</span></span></div>
+   <div><span class="muted">12 Oct 10:40:51</span><span>Payment confirmed (webhook) · status <span class="mono">processing</span></span></div>
+   <div><span class="muted">12 Oct 10:40:52</span><span>Reservation: 1 line reserved, 1 exception · Priya notified</span></div>
+   <div><span class="muted">12 Oct 10:40:53</span><span class="muted">Duplicate webhook ignored</span></div>
+  </div></div>
+ </div>
+</section>
+
+<!-- 10 PICK & PACK -->
+<section class="screen" id="pick" data-nav="Fulfilment" data-label="Pick &amp; pack" data-full="1">
+ <div class="content" style="padding:16px">
+  <div class="ph"><h2>Pick list PK-0044</h2><span class="sub">3 orders · Arjun</span><div class="act"><button class="btn">Exit</button></div></div>
+  <div class="steps"><span class="on">1 Pick</span><span>2 Pack</span><span>3 Dispatch</span></div>
+  <div class="scan"><b>Scan</b> Scan the next item…</div>
+  <div class="alert bad">Wrong item: <span><span class="mono">SAN-TAN-9</span> is not on this pick list. Put it back.</span></div>
+  <div class="panel"><table>
+   <tr><th>Location</th><th>SKU</th><th>Barcode</th><th>Item</th><th>Order</th><th class="n">Need</th><th class="n">Picked</th><th></th></tr>
+   <tr><td>Shop floor</td><td class="mono">BTL-1000</td><td class="mono">2000000045673</td><td>Steel Bottle 1 L</td><td class="mono">WC-8831</td><td class="n">2</td><td class="n">2</td><td class="s-ok">✓</td></tr>
+   <tr><td>Shop floor</td><td class="mono">KUR-IND-M</td><td class="mono">2000000012354</td><td>Cotton Kurta · M</td><td class="mono">WC-8831</td><td class="n">1</td><td class="n">0</td><td></td></tr>
+   <tr><td>Back room</td><td class="mono">DUP-SLK-MR</td><td class="mono">2000000033779</td><td>Silk Dupatta · Maroon</td><td class="mono">WC-8828</td><td class="n">1</td><td class="n">0</td><td></td></tr>
+  </table></div>
+  <div class="panel"><h3>Dispatch · WC-8831 <small>shown after packing</small></h3><div class="pb grid g4">
+   <div class="field"><label>Carrier</label><div class="input">Delhivery ▾</div></div>
+   <div class="field"><label>Service</label><div class="input">Surface</div></div>
+   <div class="field"><label>Tracking no.</label><div class="input mono">1490 2211 0083</div></div>
+   <div class="field"><label>Shipped</label><div class="input">12 Oct 2026</div></div>
+   <div style="grid-column:1/-1;display:flex;justify-content:flex-end"><button class="btn p lg">Dispatch and notify website</button></div>
+  </div></div>
+ </div>
+</section>
+
+<!-- 11 INVOICE -->
+<section class="screen" id="invoice" data-nav="Invoices" data-label="Invoice">
+ <div class="content">
+  <div class="ph"><h2>Invoice INV/26-27/0482</h2><span class="pill s-ok">Posted</span><div class="act"><button class="btn">Download PDF</button><button class="btn">Create return</button><button class="btn d">Void by credit note</button></div></div>
+  <div class="inv">
+   <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div><h4>Sutra Retail Pvt Ltd</h4><div class="muted">14 Rajpur Road, Dehradun, Uttarakhand 248001<br>GSTIN 05ABCDE1234F1Z5 · State code 05</div></div>
+    <div style="text-align:right"><b>TAX INVOICE</b><div class="muted mono">INV/26-27/0482<br>12 Oct 2026</div></div>
+   </div>
+   <hr style="border:0;border-top:1px solid var(--color-border);margin:16px 0">
+   <div class="muted">Bill to: Walk-in customer · Place of supply: Uttarakhand (05) · Intra-state</div>
+   <table style="margin-top:12px"><tr><th>Item</th><th>HSN</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">Taxable</th><th class="n">GST</th><th class="n">CGST</th><th class="n">SGST</th></tr>
+    <tr><td>Cotton Kurta · M</td><td class="mono">62114200</td><td class="n">2</td><td class="n">856.19</td><td class="n">1,712.38</td><td class="n">5%</td><td class="n">42.81</td><td class="n">42.81</td></tr>
+    <tr><td>Steel Bottle 1 L (10% off)</td><td class="mono">73239310</td><td class="n">1</td><td class="n">465.25</td><td class="n">418.73</td><td class="n">18%</td><td class="n">37.69</td><td class="n">37.69</td></tr>
+   </table>
+   <div style="max-width:300px;margin-left:auto;margin-top:12px">
+    <div class="total"><span>Taxable value</span><span>2,131.11</span></div>
+    <div class="total"><span>CGST</span><span>80.50</span></div>
+    <div class="total"><span>SGST</span><span>80.50</span></div>
+    <div class="total"><span>Round off</span><span>−0.11</span></div>
+    <div class="total big"><span>Total ₹</span><span>2,292.00</span></div>
+   </div>
+   <div class="anno" style="margin-top:12px">Example figures for layout only. Numbering, rounding and fields need sign-off by your tax adviser (PRD D7, AC-13). Tax values are a snapshot and never recomputed.</div>
+  </div>
+ </div>
+</section>
+
+<!-- 12 WOO SYNC -->
+<section class="screen" id="sync" data-nav="WooCommerce Sync" data-label="Website sync">
+ <div class="content">
+  <div class="ph"><h2>WooCommerce sync</h2><span class="pill s-ok">Connected</span><span class="sub">sutraretail.in · WooCommerce 9.x · key ck_…3f2a</span><div class="act"><button class="btn">Connection settings</button><button class="btn p">Reconcile now</button></div></div>
+  <div class="grid g4">
+   <div class="panel kpi"><div class="l">Last successful push</div><div class="v" style="font-size:18px">8 s ago</div></div>
+   <div class="panel kpi"><div class="l">Pending jobs</div><div class="v">3</div><div class="t muted">oldest 4 s</div></div>
+   <div class="panel kpi"><div class="l">Need your action</div><div class="v s-bad">2</div><div class="t muted">will not retry on their own</div></div>
+   <div class="panel kpi"><div class="l">Last reconcile</div><div class="v" style="font-size:18px">09:45</div><div class="t muted">1 difference repaired</div></div>
+  </div>
+  <div class="filters"><div class="f">Status: Failed + dead ▾</div><div class="f">Kind: All ▾</div></div>
+  <div class="panel"><table>
+   <tr><th>What</th><th>Item</th><th>Status</th><th class="n">Attempts</th><th>Last error</th><th>Next try</th><th></th></tr>
+   <tr><td>Product</td><td>Silk Dupatta</td><td><span class="pill s-bad">Needs fix</span></td><td class="n">1</td><td>Woo rejected: regular_price is required for variation Maroon</td><td class="muted">—</td><td><button class="btn">Open product</button></td></tr>
+   <tr><td>Image</td><td>Cotton Kurta · image 3</td><td><span class="pill s-bad">Needs fix</span></td><td class="n">1</td><td>Image larger than the website allows (6.2 MB)</td><td class="muted">—</td><td><button class="btn">Replace image</button></td></tr>
+   <tr><td>Fulfilment</td><td>WC-8825 tracking</td><td><span class="pill s-warn">Retrying</span></td><td class="n">3</td><td>Website timed out after 10 s</td><td>in 32 s</td><td><button class="btn">Retry now</button></td></tr>
+   <tr><td>Stock</td><td>SAN-TAN-8</td><td><span class="pill s-ok">Done</span></td><td class="n">1</td><td class="muted">—</td><td class="muted">—</td><td></td></tr>
+  </table></div>
+  <div class="anno">Errors are redacted summaries; credentials never appear here. "Needs fix" = validation error, no automatic retry (PRD 6.5).</div>
+ </div>
+</section>
+
+  </div>
+</div>
+
+<script>
+const NAV=[["Overview",["Dashboard"]],["Sell",["POS","Orders","Fulfilment","Returns","Invoices"]],["Inventory",["Products","Stock","Stocktakes","Purchasing","Suppliers"]],["Insights",["Reports","WooCommerce Sync"]],["Management",["Team & Permissions","Business Settings","Audit Log"]]];
+const stage=document.getElementById('stage'),picker=document.getElementById('picker');
+const screens=[...stage.querySelectorAll('.screen')];
+function frame(sec){
+  const active=sec.dataset.nav,full=sec.dataset.full;
+  const side='<aside class="side"><div class="brand"><i></i>Working Product</div>'+NAV.map(([g,items])=>'<div class="grp"><h6>'+g+'</h6>'+items.map(i=>'<a class="'+(i===active?'on':'')+'">'+i.replace('&','&amp;')+'</a>').join('')+'</div>').join('')+'</aside>';
+  const top='<div class="top"><div class="search">Search products, orders, invoices · or scan</div><span class="who">Sutra Retail · Priya (Owner) ▾</span></div>';
+  const body=sec.innerHTML;
+  sec.innerHTML='<div class="app'+(full?' full':'')+'">'+side+'<div class="main">'+(full?'':top)+body+'</div></div>';
+}
+screens.forEach(frame);
+function show(id){
+  screens.forEach(s=>s.hidden=s.id!==id);
+  [...picker.children].forEach(b=>b.setAttribute('aria-selected',b.dataset.id===id));
+  try{localStorage.setItem('wf-screen',id)}catch(e){}
+}
+screens.forEach(s=>{const b=document.createElement('button');b.type='button';b.role='tab';b.dataset.id=s.id;b.textContent=s.dataset.label;b.onclick=()=>{show(s.id);history.replaceState(null,'','#'+s.id)};picker.appendChild(b)});
+let start=location.hash.slice(1);
+if(!screens.some(s=>s.id===start)){try{start=localStorage.getItem('wf-screen')}catch(e){start=null}}
+show(screens.some(s=>s.id===start)?start:'dashboard');
+</script>

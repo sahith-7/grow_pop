@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{pageTitle}} · {{productName}}</title>
+  <meta name="description" content="{{pageDescription}}">
+  <link rel="stylesheet" href="{{root}}assets/site.css">
+  <link rel="icon" href="{{root}}assets/mark.svg" type="image/svg+xml">
+</head>
+<body>
+  {{draftBanner}}
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-row">
+      <a class="brand" href="{{root}}index.html"><img src="{{root}}assets/mark.svg" alt="" width="28" height="28"><span>{{productName}}</span></a>
+      <nav class="nav" aria-label="Main">
+        <a href="{{root}}features.html">Features</a>
+        <a href="{{root}}pricing.html">Pricing</a>
+        <a href="{{root}}help/index.html">Help</a>
+        <a href="{{root}}demo.html">Book a demo</a>
+        <a href="{{loginUrl}}">Sign in</a>
+        <a class="btn btn-small" href="{{signupUrl}}">Start free trial</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main" class="wrap">
+{{content}}
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-row">
+      <p>© {{year}} {{legalName}}. {{productName}} is software for retail stores in India.</p>
+      <nav aria-label="Legal and contact">
+        <a href="{{root}}contact.html">Contact</a>
+        <a href="{{root}}terms.html">Terms</a>
+        <a href="{{root}}privacy.html">Privacy</a>
+        <a href="{{root}}refund.html">Refunds</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

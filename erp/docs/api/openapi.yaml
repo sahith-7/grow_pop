@@ -1,0 +1,1992 @@
+openapi: 3.1.0
+info:
+  title: Retail ERP API
+  version: 0.2.0-design
+  description: |
+    Phase 2 contract for build stages B2–B6. Base path is /api/v1 as seen by the browser
+    (the Next.js web app proxies /api/* to the API's /v1/*).
+
+    Phase 1 routes (/auth, /users, /settings, /audit) are implemented and not repeated here,
+    except where this design extends /settings.
+
+    Conventions (see conventions.md): cookie session auth; tenant comes from the session only;
+    money and quantities are decimal strings; cursor pagination; Idempotency-Key header on
+    duplicate-prone writes; every error uses the Error envelope. `x-permission` names the
+    permission the server checks; `x-stage` is the build stage that delivers the endpoint.
+servers:
+  - url: /api/v1
+security:
+  - session: []
+tags:
+  - { name: Files }
+  - { name: Catalog }
+  - { name: Imports & exports }
+  - { name: Inventory }
+  - { name: Stocktakes }
+  - { name: Purchasing }
+  - { name: POS & sales }
+  - { name: Returns }
+  - { name: Invoicing }
+  - { name: Fulfilment }
+  - { name: WooCommerce }
+  - { name: Reports }
+  - { name: Settings }
+
+paths:
+  # ---------------------------------------------------------------- Settings (extends Phase 1)
+  /settings/tax:
+    get:
+      operationId: getSettingsTax
+      tags: [Settings]
+      summary: GST and stock policy settings
+      x-permission: settings.manage
+      x-stage: B5
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TaxSettings' } } } }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: patchSettingsTax
+      tags: [Settings]
+      summary: Update GST and stock policy settings
+      x-permission: settings.manage
+      x-stage: B5
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TaxSettings' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/TaxSettings' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /settings/locations:
+    get:
+      operationId: getSettingsLocations
+      tags: [Settings]
+      summary: List inventory locations
+      x-permission: stock.read
+      x-stage: B3
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Location' } } } } } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: postSettingsLocations
+      tags: [Settings]
+      summary: Create location
+      x-permission: settings.manage
+      x-stage: B3
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LocationInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Location' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /settings/locations/{id}:
+    patch:
+      operationId: patchSettingsLocationsById
+      tags: [Settings]
+      summary: Rename, deactivate or change sellable flag (deactivate blocked while stock is non-zero)
+      x-permission: settings.manage
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LocationInput' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Location' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /settings/invoice-series:
+    get:
+      operationId: getSettingsInvoiceSeries
+      tags: [Settings]
+      summary: List invoice and credit-note series
+      x-permission: settings.manage
+      x-stage: B5
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/InvoiceSeries' } } } } } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: postSettingsInvoiceSeries
+      tags: [Settings]
+      summary: Create a series for a financial year (numbers cannot be edited once used)
+      x-permission: settings.manage
+      x-stage: B5
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [docType, financialYear, prefix]
+              properties:
+                docType: { type: string, enum: [invoice, credit_note] }
+                financialYear: { type: string, pattern: '^\d{4}-\d{2}$', example: '2026-27' }
+                prefix: { type: string, maxLength: 10, example: 'INV/26-27/' }
+                startAt: { type: integer, minimum: 1, default: 1 }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/InvoiceSeries' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- Dashboard
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [Reports]
+      summary: Dashboard tiles; each tile is omitted when the user lacks its permission
+      x-permission: (any signed-in user)
+      x-stage: B6
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Dashboard' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- Files
+  /files/uploads:
+    post:
+      operationId: postFilesUploads
+      tags: [Files]
+      summary: Get a presigned PUT URL for one file
+      description: URL expires in 5 minutes and is bound to the declared size and content type. Max size per kind is a setting (default image 5 MB, import 10 MB).
+      x-permission: product.write
+      x-stage: B2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, contentType, byteSize]
+              properties:
+                kind: { type: string, enum: [product_image, import] }
+                contentType: { type: string, enum: [image/jpeg, image/png, image/webp, text/csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet] }
+                byteSize: { type: integer, minimum: 1 }
+                sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+      responses:
+        '201':
+          description: Upload slot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fileId: { type: string, format: uuid }
+                  uploadUrl: { type: string, format: uri }
+                  headers: { type: object, additionalProperties: { type: string } }
+                  expiresAt: { type: string, format: date-time }
+        default: { $ref: '#/components/responses/Error' }
+  /files/{id}/confirm:
+    post:
+      operationId: postFilesConfirm
+      tags: [Files]
+      summary: Confirm upload; server re-checks size, type and magic bytes before marking ready
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Ready or rejected, content: { application/json: { schema: { $ref: '#/components/schemas/File' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- Catalog
+  /categories:
+    get:
+      operationId: getCategories
+      tags: [Catalog]
+      summary: List categories
+      x-permission: product.read
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/IncludeArchived' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/RefItem' } } } } } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: postCategories
+      tags: [Catalog]
+      summary: Create category
+      x-permission: product.write
+      x-stage: B2
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RefItemInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/RefItem' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /categories/{id}:
+    patch:
+      operationId: patchCategoriesById
+      tags: [Catalog]
+      summary: Rename or archive category
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RefItemInput' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/RefItem' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /brands:
+    get:
+      operationId: getBrands
+      tags: [Catalog]
+      summary: List brands
+      x-permission: product.read
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/IncludeArchived' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/RefItem' } } } } } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: postBrands
+      tags: [Catalog]
+      summary: Create brand
+      x-permission: product.write
+      x-stage: B2
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RefItemInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/RefItem' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /brands/{id}:
+    patch:
+      operationId: patchBrandsById
+      tags: [Catalog]
+      summary: Rename or archive brand
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RefItemInput' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/RefItem' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /units:
+    get:
+      operationId: getUnits
+      tags: [Catalog]
+      summary: List units
+      x-permission: product.read
+      x-stage: B2
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Unit' } } } } } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: postUnits
+      tags: [Catalog]
+      summary: Create unit
+      x-permission: product.write
+      x-stage: B2
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Unit' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Unit' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  /products:
+    get:
+      operationId: getProducts
+      tags: [Catalog]
+      summary: Search products (CAT-01)
+      x-permission: product.read
+      x-stage: B2
+      parameters:
+        - { name: q, in: query, description: 'Name, SKU or barcode', schema: { type: string, maxLength: 100 } }
+        - { name: status, in: query, schema: { type: string, enum: [draft, active, archived] } }
+        - { name: categoryId, in: query, schema: { type: string, format: uuid } }
+        - { name: brandId, in: query, schema: { type: string, format: uuid } }
+        - { name: publishState, in: query, schema: { $ref: '#/components/schemas/PublishState' } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Page of products (variant summary, primary image thumbnail, ATS)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/ProductSummary' } } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: postProducts
+      tags: [Catalog]
+      summary: Create product with variants (CAT-01..04)
+      description: Rejects duplicate SKU/barcode within the tenant with 409 SKU_DUPLICATE / BARCODE_DUPLICATE and fieldErrors pointing at the variant index.
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /products/{id}:
+    get:
+      operationId: getProductsById
+      tags: [Catalog]
+      summary: Product detail with variants, images and publish state
+      x-permission: product.read
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } } }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: patchProductsById
+      tags: [Catalog]
+      summary: Update product fields; optimistic concurrency via If-Match
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProductPatch' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /products/{id}/archive:
+    post:
+      operationId: postProductsArchive
+      tags: [Catalog]
+      summary: Archive (history and open orders keep working; hidden from POS and search)
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Archived, content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /products/{id}/variants:
+    post:
+      operationId: postProductsVariants
+      tags: [Catalog]
+      summary: Add a variant
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/VariantInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Variant' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /variants/{id}:
+    patch:
+      operationId: patchVariantsById
+      tags: [Catalog]
+      summary: Update variant (price, barcode and cost changes are audited; cost requires cost.view)
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/VariantInput' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Variant' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /lookup:
+    get:
+      operationId: getLookup
+      tags: [Catalog]
+      summary: Resolve a scanned code to a variant (barcode, then SKU). Used by POS, receiving, stocktake, picking.
+      x-permission: product.read
+      x-stage: B2
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string, maxLength: 64 } }
+        - { name: locationId, in: query, description: 'Include availability at this location', schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Found, content: { application/json: { schema: { $ref: '#/components/schemas/LookupResult' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+  /products/{id}/images:
+    post:
+      operationId: postProductsImages
+      tags: [Catalog]
+      summary: Attach an uploaded file as product image (CAT-05/06)
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileId]
+              properties:
+                fileId: { type: string, format: uuid }
+                variantId: { type: [string, 'null'], format: uuid }
+                altText: { type: string, maxLength: 200 }
+                isPrimary: { type: boolean }
+      responses:
+        '201': { description: Attached, content: { application/json: { schema: { $ref: '#/components/schemas/Image' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /products/{id}/images/order:
+    put:
+      operationId: putProductsImagesOrder
+      tags: [Catalog]
+      summary: Set image order and primary in one call
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageIds, primaryImageId]
+              properties:
+                imageIds: { type: array, items: { type: string, format: uuid } }
+                primaryImageId: { type: string, format: uuid }
+      responses:
+        '200': { description: Reordered, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Image' } } } } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /products/{id}/images/{imageId}:
+    patch:
+      operationId: patchProductsImagesById
+      tags: [Catalog]
+      summary: Replace file or change alt text
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }, { name: imageId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { fileId: { type: string, format: uuid }, altText: { type: string } } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Image' } } } }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteProductsImagesById
+      tags: [Catalog]
+      summary: Remove image (also queues removal from Woo)
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }, { name: imageId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '204': { description: Removed }
+        default: { $ref: '#/components/responses/Error' }
+  /barcodes/generate:
+    post:
+      operationId: postBarcodesGenerate
+      tags: [Catalog]
+      summary: Reserve N internal EAN-13 barcodes (prefix + sequence + check digit)
+      x-permission: product.write
+      x-stage: B2
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [count], properties: { count: { type: integer, minimum: 1, maximum: 500 } } } } }
+      responses:
+        '200': { description: Codes, content: { application/json: { schema: { type: object, properties: { codes: { type: array, items: { type: string, pattern: '^\d{13}$' } } } } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /labels:
+    post:
+      operationId: postLabels
+      tags: [Catalog]
+      summary: Build label print data (browser renders and prints)
+      x-permission: product.read
+      x-stage: B2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, template]
+              properties:
+                template: { type: string, enum: ['50x25', '38x25', 'a4-65'] }
+                showPrice: { type: boolean, default: true }
+                items:
+                  type: array
+                  maxItems: 500
+                  items: { type: object, required: [variantId, copies], properties: { variantId: { type: string, format: uuid }, copies: { type: integer, minimum: 1, maximum: 200 } } }
+      responses:
+        '200':
+          description: Label rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  labels: { type: array, items: { type: object, properties: { barcode: { type: string }, sku: { type: string }, name: { type: string }, price: { $ref: '#/components/schemas/Money' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- Imports / exports
+  /imports:
+    post:
+      operationId: postImports
+      tags: [Imports & exports]
+      summary: Start a CSV/XLSX import; validates only, writes nothing (CAT-10)
+      x-permission: product.write
+      x-stage: B2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, fileId, mapping]
+              properties:
+                kind: { type: string, enum: [products, opening_stock] }
+                fileId: { type: string, format: uuid }
+                mapping: { type: object, additionalProperties: { type: string }, description: 'target field -> source column header' }
+                locationId: { type: string, format: uuid, description: 'Required for opening_stock' }
+      responses:
+        '202': { description: Validation queued, content: { application/json: { schema: { $ref: '#/components/schemas/ImportJob' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /imports/{id}:
+    get:
+      operationId: getImportsById
+      tags: [Imports & exports]
+      summary: Import status with first 50 error rows for preview
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ImportJob' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /imports/{id}/commit:
+    post:
+      operationId: postImportsCommit
+      tags: [Imports & exports]
+      summary: Import the valid rows (only from status validated)
+      x-permission: product.write
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '202': { description: Import queued, content: { application/json: { schema: { $ref: '#/components/schemas/ImportJob' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /exports:
+    post:
+      operationId: postExports
+      tags: [Imports & exports]
+      summary: Queue a CSV export (CAT-11); cost columns only with cost.view
+      x-permission: report.export
+      x-stage: B2
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [kind], properties: { kind: { type: string, enum: [products, stock, movements, sales, purchasing] }, filters: { type: object } } } } }
+      responses:
+        '202': { description: Queued, content: { application/json: { schema: { $ref: '#/components/schemas/ExportJob' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /exports/{id}:
+    get:
+      operationId: getExportsById
+      tags: [Imports & exports]
+      summary: Export status; downloadUrl is a 5-minute signed URL when done
+      x-permission: report.export
+      x-stage: B2
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ExportJob' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- Inventory
+  /stock/balances:
+    get:
+      operationId: getStockBalances
+      tags: [Inventory]
+      summary: On-hand, reserved, available, non-sellable per variant and location (INV-01/02)
+      x-permission: stock.read
+      x-stage: B3
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: locationId, in: query, schema: { type: string, format: uuid } }
+        - { name: lowStock, in: query, schema: { type: boolean } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/StockBalance' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /stock/movements:
+    get:
+      operationId: getStockMovements
+      tags: [Inventory]
+      summary: Ledger history (INV-03/09)
+      x-permission: stock.read
+      x-stage: B3
+      parameters:
+        - { name: variantId, in: query, schema: { type: string, format: uuid } }
+        - { name: locationId, in: query, schema: { type: string, format: uuid } }
+        - { name: movementType, in: query, schema: { $ref: '#/components/schemas/MovementType' } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/LedgerEntry' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /stock/adjustments:
+    post:
+      operationId: postStockAdjustments
+      tags: [Inventory]
+      summary: Post an adjustment or write-off (INV-04, INV-08)
+      description: |
+        reasonCode damage|expiry|loss require stock.writeoff; correction|opening require stock.adjust.
+        overrideNegative requires stock.override_negative and a note. 409 INSUFFICIENT_STOCK when the
+        result would drop sellable stock below active reservations.
+      x-permission: stock.adjust | stock.writeoff
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AdjustmentInput' } } } }
+      responses:
+        '201': { description: Posted, content: { application/json: { schema: { $ref: '#/components/schemas/PostedDocument' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /stock/transfers:
+    post:
+      operationId: postStockTransfers
+      tags: [Inventory]
+      summary: Transfer between internal locations, paired movements in one transaction (INV-06)
+      x-permission: stock.transfer
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TransferInput' } } } }
+      responses:
+        '201': { description: Posted, content: { application/json: { schema: { $ref: '#/components/schemas/PostedDocument' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /stock/movements/{id}/reverse:
+    post:
+      operationId: postStockMovementsReverse
+      tags: [Inventory]
+      summary: Reverse a posted adjustment/transfer document with a linked compensating entry
+      x-permission: stock.adjust
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/Id' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [note], properties: { note: { type: string, minLength: 3, maxLength: 500 } } } } }
+      responses:
+        '201': { description: Reversal posted, content: { application/json: { schema: { $ref: '#/components/schemas/PostedDocument' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- Stocktakes
+  /stocktakes:
+    get:
+      operationId: getStocktakes
+      tags: [Stocktakes]
+      summary: List stocktakes
+      x-permission: stocktake.count
+      x-stage: B3
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [counting, review, posted, cancelled] } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Stocktake' } } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: postStocktakes
+      tags: [Stocktakes]
+      summary: Start a stocktake; expected quantities are snapshotted now (INV-05)
+      x-permission: stocktake.count
+      x-stage: B3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [locationId]
+              properties:
+                locationId: { type: string, format: uuid }
+                categoryIds: { type: array, items: { type: string, format: uuid } }
+                blind: { type: boolean, default: true, description: 'Hide expected qty from counters' }
+      responses:
+        '201': { description: Started, content: { application/json: { schema: { $ref: '#/components/schemas/Stocktake' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /stocktakes/{id}:
+    get:
+      operationId: getStocktakesById
+      tags: [Stocktakes]
+      summary: Stocktake with lines; expected/variance hidden from counters when blind until review
+      x-permission: stocktake.count
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Stocktake' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /stocktakes/{id}/counts:
+    put:
+      operationId: putStocktakesCounts
+      tags: [Stocktakes]
+      summary: Upsert counted quantities (batch, safe to resend)
+      x-permission: stocktake.count
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [counts]
+              properties:
+                counts:
+                  type: array
+                  maxItems: 500
+                  items: { type: object, required: [variantId, countedQty], properties: { variantId: { type: string, format: uuid }, countedQty: { $ref: '#/components/schemas/Qty' } } }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/Stocktake' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /stocktakes/{id}/submit:
+    post:
+      operationId: postStocktakesSubmit
+      tags: [Stocktakes]
+      summary: Move to review
+      x-permission: stocktake.count
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: In review, content: { application/json: { schema: { $ref: '#/components/schemas/Stocktake' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /stocktakes/{id}/post:
+    post:
+      operationId: postStocktakesPost
+      tags: [Stocktakes]
+      summary: Approve and post variances as stocktake movements (AC-06)
+      x-permission: stocktake.approve
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/Id' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '200': { description: Posted, content: { application/json: { schema: { $ref: '#/components/schemas/Stocktake' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /stocktakes/{id}/cancel:
+    post:
+      operationId: postStocktakesCancel
+      tags: [Stocktakes]
+      summary: Cancel (no stock effect)
+      x-permission: stocktake.approve
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Cancelled, content: { application/json: { schema: { $ref: '#/components/schemas/Stocktake' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- Purchasing
+  /suppliers:
+    get:
+      operationId: getSuppliers
+      tags: [Purchasing]
+      summary: List suppliers
+      x-permission: purchase.manage | purchase.receive
+      x-stage: B3
+      parameters: [{ name: q, in: query, schema: { type: string } }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Cursor' }]
+      responses:
+        '200':
+          description: Page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Supplier' } } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: postSuppliers
+      tags: [Purchasing]
+      summary: Create supplier
+      x-permission: purchase.manage
+      x-stage: B3
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Supplier' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Supplier' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /suppliers/{id}:
+    patch:
+      operationId: patchSuppliersById
+      tags: [Purchasing]
+      summary: Update or archive supplier
+      x-permission: purchase.manage
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Supplier' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Supplier' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /purchase-orders:
+    get:
+      operationId: getPurchaseOrders
+      tags: [Purchasing]
+      summary: List POs with outstanding quantities (PUR-06)
+      x-permission: purchase.manage | purchase.receive
+      x-stage: B3
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/PoStatus' } }
+        - { name: supplierId, in: query, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/PurchaseOrder' } } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: postPurchaseOrders
+      tags: [Purchasing]
+      summary: Create draft PO (PUR-01)
+      x-permission: purchase.manage
+      x-stage: B3
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseOrderInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseOrder' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /purchase-orders/{id}:
+    get:
+      operationId: getPurchaseOrdersById
+      tags: [Purchasing]
+      summary: PO detail with receipts
+      x-permission: purchase.manage | purchase.receive
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseOrder' } } } }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: patchPurchaseOrdersById
+      tags: [Purchasing]
+      summary: Edit draft PO (409 INVALID_STATE after submit)
+      x-permission: purchase.manage
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/Id' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseOrderInput' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseOrder' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /purchase-orders/{id}/{action}:
+    post:
+      operationId: transitionPurchaseOrder
+      tags: [Purchasing]
+      summary: Status transition (PUR-02). submit draft→submitted; cancel draft|submitted→cancelled; close partial→closed
+      x-permission: purchase.manage
+      x-stage: B3
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+        - { name: action, in: path, required: true, schema: { type: string, enum: [submit, cancel, close] } }
+      responses:
+        '200': { description: Transitioned, content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseOrder' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /goods-receipts:
+    post:
+      operationId: postGoodsReceipts
+      tags: [Purchasing]
+      summary: Post a receipt; accepted→sellable, damaged→non-sellable (PUR-03/04, AC-05)
+      x-permission: purchase.receive
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GoodsReceiptInput' } } } }
+      responses:
+        '201': { description: Posted, content: { application/json: { schema: { $ref: '#/components/schemas/PostedDocument' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /goods-receipts/{id}:
+    get:
+      operationId: getGoodsReceiptsById
+      tags: [Purchasing]
+      summary: Receipt detail
+      x-permission: purchase.manage | purchase.receive
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/GoodsReceiptInput' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /supplier-returns:
+    post:
+      operationId: postSupplierReturns
+      tags: [Purchasing]
+      summary: Return goods to supplier (PUR-05)
+      x-permission: purchase.manage
+      x-stage: B3
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplierId, reason, lines]
+              properties:
+                supplierId: { type: string, format: uuid }
+                receiptId: { type: [string, 'null'], format: uuid }
+                reason: { type: string, maxLength: 500 }
+                lines:
+                  type: array
+                  minItems: 1
+                  items: { type: object, required: [variantId, locationId, bucket, qty], properties: { variantId: { type: string, format: uuid }, locationId: { type: string, format: uuid }, bucket: { type: string, enum: [sellable, non_sellable] }, qty: { $ref: '#/components/schemas/Qty' } } }
+      responses:
+        '201': { description: Posted, content: { application/json: { schema: { $ref: '#/components/schemas/PostedDocument' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- POS & sales
+  /pos/quote:
+    post:
+      operationId: postPosQuote
+      tags: [POS & sales]
+      summary: Price a cart (server computes tax and totals; nothing is stored)
+      x-permission: pos.sell
+      x-stage: B5
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PosCart' } } } }
+      responses:
+        '200': { description: Priced cart, content: { application/json: { schema: { $ref: '#/components/schemas/PricedCart' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /pos/sales:
+    post:
+      operationId: postPosSales
+      tags: [POS & sales]
+      summary: Complete a POS sale atomically (stock, invoice, payments, Woo stock job)
+      description: |
+        Idempotency-Key is required; resending the same key returns the original sale (200) instead of
+        creating another. Discounts beyond the user's limit → 403 DISCOUNT_LIMIT. Price override needs
+        pos.price_override. Payments must sum to the server-computed total.
+      x-permission: pos.sell
+      x-stage: B5
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKeyRequired' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/PosCart'
+                - type: object
+                  required: [payments, expectedTotal]
+                  properties:
+                    expectedTotal: { $ref: '#/components/schemas/Money', description: 'Total the cashier saw; 409 PRICE_CHANGED if the server total differs' }
+                    payments:
+                      type: array
+                      minItems: 1
+                      items: { type: object, required: [method, amount], properties: { method: { type: string, enum: [cash, card, upi, other] }, amount: { $ref: '#/components/schemas/Money' }, reference: { type: string, maxLength: 100 } } }
+      responses:
+        '201': { description: Sale completed, content: { application/json: { schema: { $ref: '#/components/schemas/SaleResult' } } } }
+        '200': { description: Replay of an earlier request with the same key, content: { application/json: { schema: { $ref: '#/components/schemas/SaleResult' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /customers:
+    get:
+      operationId: getCustomers
+      tags: [POS & sales]
+      summary: Search customers by name or phone
+      x-permission: order.read
+      x-stage: B4
+      parameters: [{ name: q, in: query, schema: { type: string } }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Cursor' }]
+      responses:
+        '200':
+          description: Page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Customer' } } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: postCustomers
+      tags: [POS & sales]
+      summary: Create customer at POS
+      x-permission: pos.sell
+      x-stage: B5
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Customer' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Customer' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /orders:
+    get:
+      operationId: getOrders
+      tags: [POS & sales]
+      summary: Orders from POS and WooCommerce
+      x-permission: order.read
+      x-stage: B4
+      parameters:
+        - { name: channel, in: query, schema: { type: string, enum: [pos, woocommerce] } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/OrderStatus' } }
+        - { name: paymentState, in: query, schema: { $ref: '#/components/schemas/PaymentState' } }
+        - { name: q, in: query, description: 'Order no., Woo id, customer phone', schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/OrderSummary' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /orders/{id}:
+    get:
+      operationId: getOrdersById
+      tags: [POS & sales]
+      summary: Order detail with lines, reservations, payments, shipments, invoices and event timeline
+      x-permission: order.read
+      x-stage: B4
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /orders/{id}/retry-reservation:
+    post:
+      operationId: postOrdersRetryReservation
+      tags: [POS & sales]
+      summary: Retry reservation for a stock_exception order after stock arrives
+      x-permission: order.fulfil
+      x-stage: B4
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Result, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /orders/{id}/map-line:
+    post:
+      operationId: postOrdersMapLine
+      tags: [POS & sales]
+      summary: Map an imported line with unknown SKU to a variant (then reservation is retried)
+      x-permission: product.write
+      x-stage: B4
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [lineId, variantId], properties: { lineId: { type: string, format: uuid }, variantId: { type: string, format: uuid } } } } }
+      responses:
+        '200': { description: Mapped, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- Returns
+  /returns:
+    get:
+      operationId: getReturns
+      tags: [Returns]
+      summary: List returns
+      x-permission: return.manage
+      x-stage: B5
+      parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Cursor' }]
+      responses:
+        '200':
+          description: Page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/ReturnResult' } } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: postReturns
+      tags: [Returns]
+      summary: Customer return with credit note; restocks only resellable lines (5.7, AC-14)
+      description: Quantity per line cannot exceed sold minus already returned (409 RETURN_EXCEEDS_SOLD).
+      x-permission: return.manage
+      x-stage: B5
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKeyRequired' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReturnInput' } } } }
+      responses:
+        '201': { description: Posted, content: { application/json: { schema: { $ref: '#/components/schemas/ReturnResult' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- Invoicing
+  /invoices:
+    get:
+      operationId: getInvoices
+      tags: [Invoicing]
+      summary: List invoices and credit notes
+      x-permission: invoice.read
+      x-stage: B5
+      parameters:
+        - { name: type, in: query, schema: { type: string, enum: [invoice, credit_note] } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Invoice' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /invoices/{id}:
+    get:
+      operationId: getInvoicesById
+      tags: [Invoicing]
+      summary: Invoice or credit note detail (snapshot)
+      x-permission: invoice.read
+      x-stage: B5
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Invoice' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /invoices/{id}/pdf:
+    get:
+      operationId: getInvoicesPdf
+      tags: [Invoicing]
+      summary: Redirect to a 5-minute signed PDF URL (202 while the PDF is still rendering)
+      x-permission: invoice.read
+      x-stage: B5
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '302': { description: Redirect to signed URL }
+        '202': { description: Rendering; retry after the Retry-After seconds }
+        default: { $ref: '#/components/responses/Error' }
+  /invoices/{id}/void:
+    post:
+      operationId: postInvoicesVoid
+      tags: [Invoicing]
+      summary: Void by reversal; issues a full credit note, original stays readable
+      x-permission: invoice.void
+      x-stage: B5
+      parameters: [{ $ref: '#/components/parameters/Id' }, { $ref: '#/components/parameters/IdempotencyKeyRequired' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [reason, restock], properties: { reason: { type: string, minLength: 3 }, restock: { type: boolean } } } } }
+      responses:
+        '200': { description: Voided, content: { application/json: { schema: { $ref: '#/components/schemas/Invoice' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- Fulfilment
+  /fulfilment/queue:
+    get:
+      operationId: getFulfilmentQueue
+      tags: [Fulfilment]
+      summary: Orders by fulfilment stage, oldest paid first
+      x-permission: order.fulfil
+      x-stage: B6
+      parameters:
+        - { name: stage, in: query, schema: { type: string, enum: [ready_to_pick, picking, packed, dispatched_pending_web, stock_exception] } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/OrderSummary' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /pick-lists:
+    post:
+      operationId: postPickLists
+      tags: [Fulfilment]
+      summary: Create a pick list for one or more ready orders (orders move to picking)
+      x-permission: order.fulfil
+      x-stage: B6
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [orderIds], properties: { orderIds: { type: array, minItems: 1, maxItems: 30, items: { type: string, format: uuid } } } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/PickList' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /pick-lists/{id}:
+    get:
+      operationId: getPickListsById
+      tags: [Fulfilment]
+      summary: Pick list sorted by location then SKU
+      x-permission: order.fulfil
+      x-stage: B6
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PickList' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /pick-lists/{id}/scan:
+    post:
+      operationId: postPickListsScan
+      tags: [Fulfilment]
+      summary: Record a picked item by scanned code; wrong item or over-pick → 409 PICK_MISMATCH
+      x-permission: order.fulfil
+      x-stage: B6
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [code], properties: { code: { type: string }, qty: { $ref: '#/components/schemas/Qty' } } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/PickList' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /orders/{id}/pack:
+    post:
+      operationId: postOrdersPack
+      tags: [Fulfilment]
+      summary: Confirm packed quantities (must equal reserved; substitutions disabled in V1)
+      x-permission: order.fulfil
+      x-stage: B6
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [lines], properties: { lines: { type: array, items: { type: object, required: [lineId, qty], properties: { lineId: { type: string, format: uuid }, qty: { $ref: '#/components/schemas/Qty' } } } } } } } }
+      responses:
+        '200': { description: Packed, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /orders/{id}/dispatch:
+    post:
+      operationId: postOrdersDispatch
+      tags: [Fulfilment]
+      summary: Dispatch; converts reservations to deductions exactly once and queues the Woo update (AC-10)
+      x-permission: order.fulfil
+      x-stage: B6
+      parameters: [{ $ref: '#/components/parameters/Id' }, { $ref: '#/components/parameters/IdempotencyKeyRequired' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [carrier, trackingNo]
+              properties:
+                carrier: { type: string, maxLength: 60 }
+                service: { type: string, maxLength: 60 }
+                trackingNo: { type: string, maxLength: 60 }
+                shippedAt: { type: string, format: date-time }
+      responses:
+        '200': { description: Dispatched, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- WooCommerce
+  /integrations/woocommerce:
+    get:
+      operationId: getIntegrationsWoocommerce
+      tags: [WooCommerce]
+      summary: Connection status (never returns secrets)
+      x-permission: sync.manage
+      x-stage: B4
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/WooConnection' } } } }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      operationId: putIntegrationsWoocommerce
+      tags: [WooCommerce]
+      summary: Connect or replace credentials (TEN-04); registers webhooks on success
+      x-permission: woo.connect
+      x-stage: B4
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WooConnectInput' } } } }
+      responses:
+        '200': { description: Connected, content: { application/json: { schema: { $ref: '#/components/schemas/WooConnection' } } } }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteIntegrationsWoocommerce
+      tags: [WooCommerce]
+      summary: Disconnect; deletes our webhooks in Woo and stored secrets; mappings kept for reconnect
+      x-permission: woo.connect
+      x-stage: B4
+      responses:
+        '204': { description: Disconnected }
+        default: { $ref: '#/components/responses/Error' }
+  /integrations/woocommerce/test:
+    post:
+      operationId: postIntegrationsWoocommerceTest
+      tags: [WooCommerce]
+      summary: Test credentials without saving (TEN-05); SSRF-guarded server-side request
+      x-permission: woo.connect
+      x-stage: B4
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WooConnectInput' } } } }
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  wooVersion: { type: string }
+                  currency: { type: string }
+                  canManageWebhooks: { type: boolean }
+                  problem: { type: string, enum: [dns, tls, unreachable, unauthorized, not_woocommerce, permissions, private_address] }
+        default: { $ref: '#/components/responses/Error' }
+  /integrations/woocommerce/match:
+    get:
+      operationId: getIntegrationsWoocommerceMatch
+      tags: [WooCommerce]
+      summary: Initial SKU match between ERP and Woo products (matched / erp_only / woo_only)
+      x-permission: sync.manage
+      x-stage: B4
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { matched: { type: integer }, erpOnly: { type: integer }, wooOnly: { type: array, items: { type: object, properties: { wooProductId: { type: integer }, sku: { type: string }, name: { type: string } } } } } } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /products/{id}/publish:
+    post:
+      operationId: postProductsPublish
+      tags: [WooCommerce]
+      summary: Queue product + images for publishing (CAT-07/08)
+      x-permission: sync.manage
+      x-stage: B4
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '202': { description: Queued, content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /sync/jobs:
+    get:
+      operationId: getSyncJobs
+      tags: [WooCommerce]
+      summary: Sync jobs for diagnostics; errors are redacted summaries
+      x-permission: sync.manage
+      x-stage: B4
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, running, failed, dead, done] } }
+        - { name: kind, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/SyncJob' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /sync/jobs/{id}/retry:
+    post:
+      operationId: postSyncJobsRetry
+      tags: [WooCommerce]
+      summary: Manual retry of a failed/dead job (audited)
+      x-permission: sync.manage
+      x-stage: B4
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '202': { description: Requeued, content: { application/json: { schema: { $ref: '#/components/schemas/SyncJob' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /sync/reconcile:
+    post:
+      operationId: postSyncReconcile
+      tags: [WooCommerce]
+      summary: Run reconciliation now; at most one running per tenant (AC-12)
+      x-permission: sync.manage
+      x-stage: B4
+      responses:
+        '202': { description: Queued, content: { application/json: { schema: { $ref: '#/components/schemas/SyncJob' } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /webhooks/woocommerce/{endpointToken}:
+    post:
+      operationId: postWebhooksWoocommerce
+      tags: [WooCommerce]
+      summary: Inbound Woo webhook (public). HMAC-SHA256 of the raw body in X-WC-Webhook-Signature.
+      description: |
+        No session, no Origin check. Rate-limited per token. Invalid signature → 401 and a security
+        audit event. Valid → inbox insert and 200 within 1 s; duplicates also return 200.
+        Woo's ping on webhook creation (form-encoded webhook_id) returns 200.
+      security: []
+      x-permission: (HMAC)
+      x-stage: B4
+      parameters:
+        - { name: endpointToken, in: path, required: true, schema: { type: string, minLength: 43, maxLength: 43 } }
+        - { name: X-WC-Webhook-Signature, in: header, required: true, schema: { type: string } }
+        - { name: X-WC-Webhook-Topic, in: header, required: true, schema: { type: string } }
+        - { name: X-WC-Webhook-Delivery-ID, in: header, schema: { type: string } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        '200': { description: Accepted or duplicate }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { description: Unknown token (no body) }
+
+  # ---------------------------------------------------------------- Reports
+  /reports/{report}:
+    get:
+      operationId: getReport
+      tags: [Reports]
+      summary: Report data (PRD 8). format=csv requires report.export; valuation columns require cost.view.
+      x-permission: report.view
+      x-stage: B6
+      parameters:
+        - { name: report, in: path, required: true, schema: { type: string, enum: [inventory-summary, low-stock, stock-movements, stocktake-variance, purchasing, sales, sync-health] } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: locationId, in: query, schema: { type: string, format: uuid } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200': { description: Rows, content: { application/json: { schema: { $ref: '#/components/schemas/ReportPage' } }, text/csv: { schema: { type: string } } } }
+        default: { $ref: '#/components/responses/Error' }
+
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: __Host-session
+      description: Opaque session token set by Phase 1 /auth/login. HttpOnly, Secure, SameSite=Lax.
+
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+    Cursor: { name: cursor, in: query, description: Opaque cursor from nextCursor, schema: { type: string } }
+    IncludeArchived: { name: includeArchived, in: query, schema: { type: boolean, default: false } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, description: 'UUID; same key + same body within 24 h returns the original result', schema: { type: string, format: uuid } }
+    IdempotencyKeyRequired: { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+    IfMatch: { name: If-Match, in: header, description: 'Version from the last read (ETag); 412 VERSION_CONFLICT if stale', schema: { type: string } }
+
+  responses:
+    Error:
+      description: Error envelope
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message, correlationId, retryable]
+      properties:
+        code:
+          type: string
+          description: Machine-readable. Full list in conventions.md.
+          examples: [VALIDATION_ERROR, SKU_DUPLICATE, INSUFFICIENT_STOCK, NOT_FOUND, FORBIDDEN]
+        message: { type: string, description: 'Human-readable, safe to show; never contains secrets or SQL' }
+        fieldErrors: { type: object, additionalProperties: { type: array, items: { type: string } } }
+        correlationId: { type: string }
+        retryable: { type: boolean }
+    Money: { type: string, pattern: '^-?\d{1,12}(\.\d{1,4})?$', example: '1299.00' }
+    Qty: { type: string, pattern: '^-?\d{1,11}(\.\d{1,3})?$', example: '2' }
+    Page:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: {} }
+        nextCursor: { type: [string, 'null'] }
+    RefItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        parentId: { type: [string, 'null'], format: uuid }
+        archivedAt: { type: [string, 'null'], format: date-time }
+    RefItemInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        parentId: { type: [string, 'null'], format: uuid }
+        archived: { type: boolean }
+    Unit:
+      type: object
+      required: [name, abbr]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        name: { type: string }
+        abbr: { type: string, maxLength: 10 }
+        allowFraction: { type: boolean, default: false }
+    File:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, ready, rejected] }
+        rejectReason: { type: string }
+    PublishState: { type: string, enum: [not_published, queued, synced, failed, needs_review] }
+    ProductSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string, enum: [draft, active, archived] }
+        category: { type: [string, 'null'] }
+        variantCount: { type: integer }
+        skus: { type: array, items: { type: string }, maxItems: 3 }
+        priceRange: { type: object, properties: { min: { $ref: '#/components/schemas/Money' }, max: { $ref: '#/components/schemas/Money' } } }
+        available: { $ref: '#/components/schemas/Qty' }
+        thumbnailUrl: { type: [string, 'null'], format: uri }
+        publishState: { $ref: '#/components/schemas/PublishState' }
+    ProductInput:
+      type: object
+      required: [name, type, variants]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 5000 }
+        categoryId: { type: [string, 'null'], format: uuid }
+        brandId: { type: [string, 'null'], format: uuid }
+        unitId: { type: string, format: uuid }
+        type: { type: string, enum: [simple, variable] }
+        status: { type: string, enum: [draft, active], default: draft }
+        hsnCode: { type: string, pattern: '^\d{4,8}$' }
+        gstRate: { type: string, example: '18' }
+        tracking: { type: string, enum: [none, batch, serial], default: none }
+        publishToWeb: { type: boolean, default: false }
+        attributes: { type: array, items: { type: object, properties: { name: { type: string }, values: { type: array, items: { type: string } } } } }
+        variants: { type: array, minItems: 1, maxItems: 200, items: { $ref: '#/components/schemas/VariantInput' } }
+    ProductPatch:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        categoryId: { type: [string, 'null'], format: uuid }
+        brandId: { type: [string, 'null'], format: uuid }
+        status: { type: string, enum: [draft, active] }
+        hsnCode: { type: string }
+        gstRate: { type: string }
+        publishToWeb: { type: boolean }
+    Product:
+      allOf:
+        - $ref: '#/components/schemas/ProductInput'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            version: { type: integer }
+            publishState: { $ref: '#/components/schemas/PublishState' }
+            publishError: { type: [string, 'null'] }
+            variants: { type: array, items: { $ref: '#/components/schemas/Variant' } }
+            images: { type: array, items: { $ref: '#/components/schemas/Image' } }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    VariantInput:
+      type: object
+      required: [sku, price]
+      properties:
+        sku: { type: string, minLength: 1, maxLength: 64 }
+        barcode: { type: [string, 'null'], pattern: '^[0-9A-Za-z\-]{4,64}$' }
+        attributes: { type: object, additionalProperties: { type: string } }
+        price: { $ref: '#/components/schemas/Money' }
+        mrp: { $ref: '#/components/schemas/Money' }
+        cost: { $ref: '#/components/schemas/Money', description: 'Requires cost.view; omitted from responses without it' }
+        weightG: { type: integer }
+        dimensionsMm: { type: object, properties: { l: { type: integer }, w: { type: integer }, h: { type: integer } } }
+        reorderLevel: { $ref: '#/components/schemas/Qty' }
+    Variant:
+      allOf:
+        - $ref: '#/components/schemas/VariantInput'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            version: { type: integer }
+            status: { type: string, enum: [active, archived] }
+            onHand: { $ref: '#/components/schemas/Qty' }
+            available: { $ref: '#/components/schemas/Qty' }
+            wooState: { $ref: '#/components/schemas/PublishState' }
+    Image:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string, format: uri, description: '10-minute signed URL' }
+        thumbnailUrl: { type: string, format: uri }
+        variantId: { type: [string, 'null'], format: uuid }
+        sortOrder: { type: integer }
+        isPrimary: { type: boolean }
+        altText: { type: string }
+        syncState: { type: string, enum: [pending, synced, failed] }
+        lastError: { type: [string, 'null'] }
+    LookupResult:
+      type: object
+      properties:
+        matchedOn: { type: string, enum: [barcode, sku] }
+        productId: { type: string, format: uuid }
+        variant: { $ref: '#/components/schemas/Variant' }
+        productName: { type: string }
+        gstRate: { type: string }
+        available: { $ref: '#/components/schemas/Qty' }
+    ImportJob:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [products, opening_stock] }
+        status: { type: string, enum: [uploaded, validating, validated, importing, done, failed] }
+        totalRows: { type: integer }
+        validRows: { type: integer }
+        errorRows: { type: integer }
+        errors: { type: array, maxItems: 50, items: { type: object, properties: { row: { type: integer }, column: { type: string }, message: { type: string } } } }
+        errorReportUrl: { type: [string, 'null'], format: uri }
+    ExportJob:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, running, done, failed] }
+        rowCount: { type: integer }
+        downloadUrl: { type: [string, 'null'], format: uri }
+    Location:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string, enum: [shop_floor, back_room, quarantine] }
+        isSellable: { type: boolean }
+        isOnlineFulfilment: { type: boolean }
+        active: { type: boolean }
+    LocationInput:
+      type: object
+      properties:
+        name: { type: string, maxLength: 60 }
+        type: { type: string, enum: [shop_floor, back_room, quarantine] }
+        isSellable: { type: boolean }
+        active: { type: boolean }
+    StockBalance:
+      type: object
+      properties:
+        variantId: { type: string, format: uuid }
+        sku: { type: string }
+        name: { type: string }
+        locationId: { type: string, format: uuid }
+        onHand: { $ref: '#/components/schemas/Qty' }
+        reserved: { $ref: '#/components/schemas/Qty' }
+        available: { $ref: '#/components/schemas/Qty' }
+        nonSellable: { $ref: '#/components/schemas/Qty' }
+        reorderLevel: { $ref: '#/components/schemas/Qty' }
+        value: { $ref: '#/components/schemas/Money', description: 'Only with cost.view' }
+    MovementType: { type: string, enum: [opening, receipt, sale, dispatch, adjustment, writeoff, transfer_out, transfer_in, return_in, supplier_return, stocktake, reversal] }
+    LedgerEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        postedAt: { type: string, format: date-time }
+        variantId: { type: string, format: uuid }
+        sku: { type: string }
+        locationId: { type: string, format: uuid }
+        bucket: { type: string, enum: [sellable, non_sellable] }
+        qtyDelta: { $ref: '#/components/schemas/Qty' }
+        balanceAfter: { $ref: '#/components/schemas/Qty' }
+        movementType: { $ref: '#/components/schemas/MovementType' }
+        source: { type: object, properties: { type: { type: string }, id: { type: string, format: uuid }, number: { type: string } } }
+        reasonCode: { type: [string, 'null'] }
+        note: { type: [string, 'null'] }
+        actor: { type: object, properties: { id: { type: string }, name: { type: string } } }
+    AdjustmentInput:
+      type: object
+      required: [locationId, reasonCode, lines]
+      properties:
+        locationId: { type: string, format: uuid }
+        reasonCode: { type: string, enum: [damage, expiry, loss, correction, opening] }
+        note: { type: string, maxLength: 500 }
+        overrideNegative: { type: boolean, default: false }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { type: object, required: [variantId, qtyDelta], properties: { variantId: { type: string, format: uuid }, qtyDelta: { $ref: '#/components/schemas/Qty' }, bucket: { type: string, enum: [sellable, non_sellable], default: sellable } } }
+    TransferInput:
+      type: object
+      required: [fromLocationId, toLocationId, lines]
+      properties:
+        fromLocationId: { type: string, format: uuid }
+        toLocationId: { type: string, format: uuid }
+        note: { type: string }
+        lines: { type: array, minItems: 1, items: { type: object, required: [variantId, qty], properties: { variantId: { type: string, format: uuid }, qty: { $ref: '#/components/schemas/Qty' } } } }
+    PostedDocument:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        postedAt: { type: string, format: date-time }
+        movements: { type: array, items: { $ref: '#/components/schemas/LedgerEntry' } }
+    Stocktake:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        status: { type: string, enum: [counting, review, posted, cancelled] }
+        locationId: { type: string, format: uuid }
+        blind: { type: boolean }
+        snapshotAt: { type: string, format: date-time }
+        progress: { type: object, properties: { counted: { type: integer }, total: { type: integer } } }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              variantId: { type: string, format: uuid }
+              sku: { type: string }
+              name: { type: string }
+              expectedQty: { $ref: '#/components/schemas/Qty' }
+              movedDuringCount: { $ref: '#/components/schemas/Qty' }
+              countedQty: { $ref: '#/components/schemas/Qty' }
+              variance: { $ref: '#/components/schemas/Qty' }
+              varianceValue: { $ref: '#/components/schemas/Money', description: 'Only with cost.view' }
+    Supplier:
+      type: object
+      required: [name]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        name: { type: string, maxLength: 120 }
+        phone: { type: string }
+        email: { type: string, format: email }
+        gstin: { type: string }
+        stateCode: { type: string, pattern: '^\d{2}$' }
+        address: { type: object }
+        archived: { type: boolean }
+    PoStatus: { type: string, enum: [draft, submitted, partial, closed, cancelled] }
+    PurchaseOrderInput:
+      type: object
+      required: [supplierId, lines]
+      properties:
+        supplierId: { type: string, format: uuid }
+        expectedDate: { type: string, format: date }
+        notes: { type: string }
+        lines: { type: array, minItems: 1, items: { type: object, required: [variantId, orderedQty, unitCost], properties: { variantId: { type: string, format: uuid }, orderedQty: { $ref: '#/components/schemas/Qty' }, unitCost: { $ref: '#/components/schemas/Money' } } } }
+    PurchaseOrder:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        status: { $ref: '#/components/schemas/PoStatus' }
+        supplier: { $ref: '#/components/schemas/Supplier' }
+        expectedDate: { type: string, format: date }
+        version: { type: integer }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              variantId: { type: string, format: uuid }
+              sku: { type: string }
+              name: { type: string }
+              orderedQty: { $ref: '#/components/schemas/Qty' }
+              receivedQty: { $ref: '#/components/schemas/Qty' }
+              outstandingQty: { $ref: '#/components/schemas/Qty' }
+              unitCost: { $ref: '#/components/schemas/Money' }
+        receipts: { type: array, items: { type: object, properties: { id: { type: string }, number: { type: string }, receivedAt: { type: string, format: date-time } } } }
+    GoodsReceiptInput:
+      type: object
+      required: [supplierId, lines]
+      properties:
+        purchaseOrderId: { type: [string, 'null'], format: uuid }
+        supplierId: { type: string, format: uuid }
+        supplierInvoiceNo: { type: string }
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [variantId, locationId, receivedQty, acceptedQty]
+            properties:
+              poLineId: { type: [string, 'null'], format: uuid }
+              variantId: { type: string, format: uuid }
+              locationId: { type: string, format: uuid }
+              receivedQty: { $ref: '#/components/schemas/Qty' }
+              acceptedQty: { $ref: '#/components/schemas/Qty' }
+              damagedQty: { $ref: '#/components/schemas/Qty' }
+              unitCost: { $ref: '#/components/schemas/Money' }
+    PosCart:
+      type: object
+      required: [lines]
+      properties:
+        customerId: { type: [string, 'null'], format: uuid }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required: [variantId, qty]
+            properties:
+              variantId: { type: string, format: uuid }
+              qty: { $ref: '#/components/schemas/Qty' }
+              unitPriceOverride: { $ref: '#/components/schemas/Money' }
+              discountPct: { type: string }
+              discountReason: { type: string, maxLength: 200 }
+        cartDiscountPct: { type: string }
+        cartDiscountReason: { type: string }
+    PricedCart:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              variantId: { type: string, format: uuid }
+              name: { type: string }
+              qty: { $ref: '#/components/schemas/Qty' }
+              unitPrice: { $ref: '#/components/schemas/Money' }
+              discount: { $ref: '#/components/schemas/Money' }
+              taxableValue: { $ref: '#/components/schemas/Money' }
+              gstRate: { type: string }
+              tax: { $ref: '#/components/schemas/Money' }
+              lineTotal: { $ref: '#/components/schemas/Money' }
+              available: { $ref: '#/components/schemas/Qty' }
+        subtotal: { $ref: '#/components/schemas/Money' }
+        discountTotal: { $ref: '#/components/schemas/Money' }
+        taxBreakdown: { type: object, properties: { cgst: { $ref: '#/components/schemas/Money' }, sgst: { $ref: '#/components/schemas/Money' }, igst: { $ref: '#/components/schemas/Money' } } }
+        roundOff: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+    SaleResult:
+      type: object
+      properties:
+        orderId: { type: string, format: uuid }
+        orderNumber: { type: string }
+        invoiceId: { type: string, format: uuid }
+        invoiceNumber: { type: string }
+        total: { $ref: '#/components/schemas/Money' }
+        change: { $ref: '#/components/schemas/Money' }
+    Customer:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        name: { type: string, maxLength: 120 }
+        phone: { type: string, pattern: '^\+?[0-9]{8,15}$' }
+        email: { type: string, format: email }
+        gstin: { type: string }
+        stateCode: { type: string }
+        billingAddress: { type: object }
+        shippingAddress: { type: object }
+    OrderStatus: { type: string, enum: [awaiting_payment, on_hold, paid, stock_exception, ready_to_pick, picking, packed, dispatched, completed, cancelled, failed, refunded, needs_review] }
+    PaymentState: { type: string, enum: [awaiting, paid, failed, refunded, partially_refunded] }
+    OrderSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        channel: { type: string, enum: [pos, woocommerce] }
+        externalId: { type: [string, 'null'] }
+        wooStatus: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        paymentState: { $ref: '#/components/schemas/PaymentState' }
+        customerName: { type: [string, 'null'] }
+        itemCount: { type: integer }
+        total: { $ref: '#/components/schemas/Money' }
+        placedAt: { type: string, format: date-time }
+        webUpdatePending: { type: boolean }
+    Order:
+      allOf:
+        - $ref: '#/components/schemas/OrderSummary'
+        - type: object
+          properties:
+            customer: { $ref: '#/components/schemas/Customer' }
+            lines:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  variantId: { type: [string, 'null'], format: uuid }
+                  sku: { type: string }
+                  name: { type: string }
+                  qty: { $ref: '#/components/schemas/Qty' }
+                  unitPrice: { $ref: '#/components/schemas/Money' }
+                  reservation: { type: [object, 'null'], properties: { state: { type: string, enum: [active, converted, released, exception] }, locationId: { type: string } } }
+            payments: { type: array, items: { type: object, properties: { method: { type: string }, amount: { $ref: '#/components/schemas/Money' }, status: { type: string }, reference: { type: string } } } }
+            shipments: { type: array, items: { type: object, properties: { carrier: { type: string }, trackingNo: { type: string }, shippedAt: { type: string }, wooUpdateState: { type: string } } } }
+            invoices: { type: array, items: { type: object, properties: { id: { type: string }, number: { type: string }, type: { type: string } } } }
+            events: { type: array, items: { type: object, properties: { at: { type: string, format: date-time }, kind: { type: string }, fromStatus: { type: string }, toStatus: { type: string }, actor: { type: string } } } }
+    ReturnInput:
+      type: object
+      required: [orderId, reason, refundMethod, lines]
+      properties:
+        orderId: { type: string, format: uuid }
+        reason: { type: string, maxLength: 500 }
+        refundMethod: { type: string, enum: [cash, card, upi, original, store_credit_note, none] }
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [orderLineId, qty, condition]
+            properties:
+              orderLineId: { type: string, format: uuid }
+              qty: { $ref: '#/components/schemas/Qty' }
+              condition: { type: string, enum: [resellable, damaged, quarantine] }
+              locationId: { type: string, format: uuid }
+    ReturnResult:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        creditNoteId: { type: string, format: uuid }
+        creditNoteNumber: { type: string }
+        refundAmount: { $ref: '#/components/schemas/Money' }
+        restockedLines: { type: integer }
+    Invoice:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [invoice, credit_note] }
+        number: { type: string }
+        state: { type: string, enum: [posted, voided_by_reversal] }
+        issuedAt: { type: string, format: date-time }
+        orderId: { type: string, format: uuid }
+        originalInvoiceId: { type: [string, 'null'], format: uuid }
+        seller: { type: object }
+        buyer: { type: object }
+        placeOfSupply: { type: string }
+        supplyType: { type: string, enum: [intra, inter] }
+        lines: { type: array, items: { type: object, properties: { description: { type: string }, hsnCode: { type: string }, qty: { $ref: '#/components/schemas/Qty' }, unitPrice: { $ref: '#/components/schemas/Money' }, discount: { $ref: '#/components/schemas/Money' }, taxableValue: { $ref: '#/components/schemas/Money' }, gstRate: { type: string }, cgst: { $ref: '#/components/schemas/Money' }, sgst: { $ref: '#/components/schemas/Money' }, igst: { $ref: '#/components/schemas/Money' } } } }
+        taxableTotal: { $ref: '#/components/schemas/Money' }
+        cgst: { $ref: '#/components/schemas/Money' }
+        sgst: { $ref: '#/components/schemas/Money' }
+        igst: { $ref: '#/components/schemas/Money' }
+        roundOff: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+    InvoiceSeries:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        docType: { type: string, enum: [invoice, credit_note] }
+        financialYear: { type: string }
+        prefix: { type: string }
+        nextNumber: { type: integer }
+        active: { type: boolean }
+    TaxSettings:
+      type: object
+      properties:
+        legalName: { type: string }
+        gstin: { type: [string, 'null'], pattern: '^[0-9]{2}[A-Z0-9]{13}$' }
+        stateCode: { type: string, pattern: '^\d{2}$' }
+        pricesIncludeTax: { type: boolean }
+        allowNegativeStock: { type: boolean }
+        onlineLocationId: { type: string, format: uuid }
+        discountReasonThresholdPct: { type: string }
+        roleDiscountLimits: { type: object, additionalProperties: { type: string }, example: { cashier: '10', manager: '50' } }
+    PickList:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        status: { type: string, enum: [open, picking, picked, cancelled] }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              orderId: { type: string, format: uuid }
+              orderNumber: { type: string }
+              variantId: { type: string, format: uuid }
+              sku: { type: string }
+              barcode: { type: string }
+              name: { type: string }
+              location: { type: string }
+              qtyRequired: { $ref: '#/components/schemas/Qty' }
+              qtyPicked: { $ref: '#/components/schemas/Qty' }
+    WooConnectInput:
+      type: object
+      required: [siteUrl, consumerKey, consumerSecret]
+      properties:
+        siteUrl: { type: string, format: uri, pattern: '^https://' }
+        consumerKey: { type: string, pattern: '^ck_[a-f0-9]{40}$', writeOnly: true }
+        consumerSecret: { type: string, pattern: '^cs_[a-f0-9]{40}$', writeOnly: true }
+        importOrdersSinceDays: { type: integer, minimum: 0, maximum: 90, default: 0 }
+    WooConnection:
+      type: object
+      properties:
+        status: { type: string, enum: [not_connected, connected, error, disconnected] }
+        siteUrl: { type: string }
+        keyHint: { type: string, example: 'ck_…3f2a' }
+        wooVersion: { type: string }
+        lastSuccessAt: { type: [string, 'null'], format: date-time }
+        lastError: { type: [string, 'null'] }
+        webhooksHealthy: { type: boolean }
+        pending: { type: integer }
+        failed: { type: integer }
+        oldestPendingAgeSec: { type: integer }
+    SyncJob:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        resource: { type: object, properties: { type: { type: string }, id: { type: string }, label: { type: string } } }
+        status: { type: string, enum: [pending, running, done, failed, dead] }
+        attempts: { type: integer }
+        nextAttemptAt: { type: [string, 'null'], format: date-time }
+        lastError: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    Dashboard:
+      type: object
+      properties:
+        sales: { type: object, properties: { today: { $ref: '#/components/schemas/Money' }, yesterday: { $ref: '#/components/schemas/Money' }, orders: { type: integer } } }
+        stock: { type: object, properties: { productCount: { type: integer }, lowStockCount: { type: integer }, value: { $ref: '#/components/schemas/Money' } } }
+        attention: { type: object, properties: { stockExceptions: { type: integer }, readyToPick: { type: integer }, failedSyncJobs: { type: integer }, stocktakesInReview: { type: integer } } }
+        recentSales: { type: array, items: { $ref: '#/components/schemas/OrderSummary' } }
+        bestSellers: { type: array, items: { type: object, properties: { name: { type: string }, qty: { $ref: '#/components/schemas/Qty' } } } }
+    ReportPage:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            columns: { type: array, items: { type: object, properties: { key: { type: string }, label: { type: string }, type: { type: string, enum: [text, qty, money, date] } } } }
+            totals: { type: object }

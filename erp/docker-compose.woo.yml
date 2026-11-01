@@ -1,0 +1,81 @@
+# B4 · LOCAL ONLY: a throwaway WooCommerce shop next to the ERP, for trying the sync on your own machine.
+# Start:  docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.woo.yml up --build -d
+# Key:    docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.woo.yml logs woo-setup
+# Needs NODE_ENV=development in .env (the dev flags below are refused in production). Never deploy this file.
+services:
+  woo-db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: woo-dev-root
+      MARIADB_DATABASE: wp
+      MARIADB_USER: wp
+      MARIADB_PASSWORD: woo-dev
+    volumes: [woodb:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 20
+
+  # A self-signed certificate for https://woo (inside Docker) and https://localhost:8443 (your browser will warn; that's expected).
+  woo-certs:
+    image: alpine/openssl:3.5.4
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        [ -f /certs/woo.crt ] || openssl req -x509 -newkey rsa:2048 -nodes -days 825 -subj /CN=woo
+        -addext subjectAltName=DNS:woo,DNS:localhost -keyout /certs/woo.key -out /certs/woo.crt
+        && chmod 644 /certs/woo.crt
+    volumes: [woocerts:/certs]
+    restart: "no"
+
+  woo:
+    image: wordpress:7.1-php8.3-apache   # WooCommerce 11 needs WordPress 7.0 or later
+    entrypoint: ["/bin/bash", "-c"]
+    command: ["a2enmod ssl >/dev/null && exec docker-entrypoint.sh apache2-foreground"]
+    ports: ["${WOO_PORT:-8443}:443"]
+    environment:
+      WORDPRESS_DB_HOST: woo-db
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: woo-dev
+      WORDPRESS_DB_NAME: wp
+    volumes:
+      - wphtml:/var/www/html
+      - woocerts:/certs:ro
+      - ./docker/woo/ssl.conf:/etc/apache2/sites-enabled/woo-ssl.conf:ro
+      - ./docker/woo/erp-dev.php:/var/www/html/wp-content/mu-plugins/erp-dev.php:ro
+    depends_on:
+      woo-db: { condition: service_healthy }
+      woo-certs: { condition: service_completed_successfully }
+
+  # Installs WordPress + WooCommerce once and prints a REST key. Safe to re-run.
+  woo-setup:
+    image: wordpress:cli-2.12-php8.3
+    user: "33:33"
+    entrypoint: ["/bin/sh", "/setup.sh"]
+    environment:
+      WORDPRESS_DB_HOST: woo-db
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: woo-dev
+      WORDPRESS_DB_NAME: wp
+      WOO_PORT: ${WOO_PORT:-8443}
+      WOO_VERSION: "11.1.2"
+    volumes:
+      - wphtml:/var/www/html
+      - ./docker/woo/setup.sh:/setup.sh:ro
+    depends_on: [woo]
+    restart: "no"
+
+  api: &woodev
+    environment:
+      WOO_DEV_ALLOW_PRIVATE: "true"           # allow the shop's private Docker address (refused when NODE_ENV=production)
+      WOO_DEV_CA_FILE: /woo-certs/woo.crt     # trust the dev shop's self-signed certificate
+      WOO_WEBHOOK_BASE_URL: http://api:4000   # the shop reaches the api directly on the Docker network
+    volumes: [woocerts:/woo-certs:ro]
+    depends_on: { woo-certs: { condition: service_completed_successfully } }
+
+  worker: *woodev
+
+volumes:
+  woodb:
+  wphtml:
+  woocerts:
