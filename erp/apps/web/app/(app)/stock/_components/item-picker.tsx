@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { attrLabel } from '../../../../lib/format';
 import { api, type Balance, type Picked } from '../../../../lib/stock-api';
+import { Suggestions, useSuggest } from '../../../../lib/suggest';
 
 /**
  * Scan or search box that adds an item to a form. A scanner types the code and presses Enter: an exact barcode or SKU
@@ -16,8 +17,10 @@ export function ItemPicker({ onPick, placeholder = 'Scan a barcode or search nam
   const [state, setState] = useState<'' | 'ok' | 'error'>('');
   const [message, setMessage] = useState('');
   const input = useRef<HTMLInputElement>(null);
+  // Matches while typing (a scanner is faster than the delay and ends with Enter, which still adds the exact code).
+  const sg = useSuggest<Balance>({ q, delay: 250, load: (t) => api<{ items: Balance[] }>(`/stock/balances?limit=8&q=${encodeURIComponent(t)}`).then((r) => r.data.items) });
 
-  const done = (item: Picked) => { onPick(item); setQ(''); setMatches(null); setState('ok'); setMessage(`Added ${item.sku}`); input.current?.focus(); };
+  const done = (item: Picked) => { sg.quiet(''); sg.close(); onPick(item); setQ(''); setMatches(null); setState('ok'); setMessage(`Added ${item.sku}`); input.current?.focus(); };
 
   const submit = async () => {
     const term = q.trim();
@@ -42,11 +45,19 @@ export function ItemPicker({ onPick, placeholder = 'Scan a barcode or search nam
     <div style={{ position: 'relative' }}>
       {/* Not a <form>: the picker sits inside the page's own form, and Enter here must never submit that. */}
       <div role="search">
-        <label className="ui-scan" data-state={state || undefined}>
-          <span className="ui-scan-dot" aria-hidden />
-          <input ref={input} value={q} onChange={(e) => { setQ(e.target.value); setState(''); }} placeholder={placeholder} aria-label="Scan or search item" autoFocus={autoFocus} autoComplete="off"
-            enterKeyHint="search" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }} />
-        </label>
+        <div className="gp-suggest">
+          <label className="ui-scan" data-state={state || undefined}>
+            <span className="ui-scan-dot" aria-hidden />
+            <input ref={input} value={q} onChange={(e) => { setQ(e.target.value); setState(''); setMatches(null); }} placeholder={placeholder} aria-label="Scan or search item" autoFocus={autoFocus}
+              enterKeyHint="search" {...sg.inputProps}
+              onKeyDown={(e) => { if (sg.onKeyDown(e, done)) return; if (e.key === 'Enter') { e.preventDefault(); sg.close(); submit(); } }} />
+          </label>
+          <Suggestions s={sg} onPick={done} label="Matching items" render={(m) => (<>
+            <span className="gp-suggest-title">{m.name}{Object.keys(m.attributes).length > 0 && <span className="ui-muted"> · {attrLabel(m.attributes)}</span>}</span>
+            <span className="gp-suggest-end">{m.onHand} on hand</span>
+            <span className="gp-suggest-sub ui-code">{m.sku}</span>
+          </>)} />
+        </div>
       </div>
       <div className="ui-help" aria-live="polite" style={{ minHeight: 18, color: state === 'error' ? 'var(--danger)' : undefined }}>{message}</div>
       {matches && matches.length > 0 && (

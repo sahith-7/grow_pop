@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { papi, perr, type StoreRow } from '@/lib/platform-api';
+import { fmtDate } from '@/lib/datetime';
 
 const TONE: Record<string, string> = { trial: 'info', active: 'success', past_due: 'warning', suspended: 'danger', closed: '' };
 const LABEL: Record<string, string> = { trial: 'Trial', active: 'Active', past_due: 'Payment due', suspended: 'Read-only', closed: 'Closed' };
-const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+const day = (iso: string | null) => fmtDate(iso);
 
 export default function Stores() {
   const [items, setItems] = useState<StoreRow[] | null>(null);

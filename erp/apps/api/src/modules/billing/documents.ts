@@ -57,12 +57,13 @@ export const DOC_TITLE: Record<string, string> = {
  * Next number in this financial year's series, gap-free: the series row is locked until the document commits, and a
  * rollback gives the number back. A year's series is created on first use with the default prefix (INV/26-27/).
  */
-export async function takeNumber(tx: Tx, docType: 'invoice' | 'credit_note', fy: string, basePrefix: string) {
+export async function takeNumber(tx: Tx, docType: 'invoice' | 'credit_note', fy: string, basePrefix: string, outletId: string) {
+  // Each outlet has its own series (v2, D101), so two counters never wait for each other.
   await tx.query(
-    `INSERT INTO invoice_series (tenant_id, doc_type, financial_year, prefix, start_number, next_number)
-     VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, 1, 1) ON CONFLICT DO NOTHING`, [docType, fy, seriesPrefix(basePrefix, fy)]);
+    `INSERT INTO invoice_series (tenant_id, outlet_id, doc_type, financial_year, prefix, start_number, next_number)
+     VALUES (current_setting('app.tenant_id')::uuid, $4, $1, $2, $3, 1, 1) ON CONFLICT DO NOTHING`, [docType, fy, seriesPrefix(basePrefix, fy), outletId]);
   const { rows: [s] } = await tx.query(
-    'SELECT id, prefix, next_number FROM invoice_series WHERE doc_type = $1 AND financial_year = $2 FOR UPDATE', [docType, fy]);
+    'SELECT id, prefix, next_number FROM invoice_series WHERE doc_type = $1 AND financial_year = $2 AND outlet_id = $3 FOR UPDATE', [docType, fy, outletId]);
   const number = `${s.prefix}${s.next_number}`;
   if (number.length > 16) {
     throw appError(409, 'SERIES_FULL', `The ${fy} ${docType === 'invoice' ? 'invoice' : 'credit note'} series has run out of 16-character numbers. Ask the owner to start a new series with a shorter prefix.`);
@@ -86,7 +87,7 @@ export async function issueInvoice(tx: Tx, p: Profile, x: {
   const scheme = p.scheme!;
   const t = totalsOf(x.lines, x.round);
   const fy = fyNow(p);
-  const { seriesId, number } = await takeNumber(tx, 'invoice', fy, p.settings.invoicePrefix);
+  const { seriesId, number } = await takeNumber(tx, 'invoice', fy, p.settings.invoicePrefix, p.outlet.id);
   const { rows: [inv] } = await tx.query(
     `INSERT INTO invoices (tenant_id, number, series_id, financial_year, order_id, doc_kind, gst_scheme, seller, buyer, place_of_supply,
        supply_type, prices_include_tax, taxable_total, cgst, sgst, igst, round_off, total, issued_by)

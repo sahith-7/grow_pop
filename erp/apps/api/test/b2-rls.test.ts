@@ -29,7 +29,8 @@ describe('B2 tenant isolation', () => {
     const { rows } = await owner.query(
       `SELECT table_name, privilege_type FROM information_schema.role_table_grants
         WHERE grantee = 'erp_rt' AND privilege_type = 'DELETE' AND table_name = ANY($1)`, [B2_TABLES]);
-    expect(rows.map((r) => r.table_name).sort()).toEqual(['product_images']);
+    // v2 (D89): unused categories and brands may be deleted; the service checks nothing uses them.
+    expect(rows.map((r) => r.table_name).sort()).toEqual(['brands', 'categories', 'product_images']);
   });
 
   it('the runtime role can only read units and can never change an uploaded file', async () => {

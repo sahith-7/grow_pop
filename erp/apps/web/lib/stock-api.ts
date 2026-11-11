@@ -1,7 +1,8 @@
 // Shapes and helpers for the B3 stock, stocktake and purchasing screens. Calls go through catalog-api's api().
+import { fmtDateTime } from './datetime';
 export { api, ApiError, errorText } from './catalog-api';
 
-export interface Location { id: string; name: string; type: 'shop_floor' | 'back_room' | 'quarantine'; isSellable: boolean; active: boolean }
+export interface Location { id: string; name: string; type: 'shop_floor' | 'back_room' | 'quarantine'; isSellable: boolean; active: boolean; outletId?: string; outletName?: string | null }
 export interface StockMeta {
   locations: Location[];
   can: { adjust: boolean; writeoff: boolean; transfer: boolean; overrideNegative: boolean; count: boolean; approve: boolean;
@@ -48,7 +49,7 @@ export const idemKey = () => ({ 'idempotency-key': crypto.randomUUID() });
 /** "-2" -> "−2", "3" -> "+3" for movement columns. */
 export const signed = (q: string) => (q.startsWith('-') ? `−${q.slice(1)}` : `+${q}`);
 
-export const dateTime = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+export const dateTime = (iso: string) => fmtDateTime(iso);
 export const fieldError = (errors: Record<string, string[]>, key: string) => errors[key]?.[0];
 
 export interface StocktakeLine {

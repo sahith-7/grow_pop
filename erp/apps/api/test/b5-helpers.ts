@@ -22,6 +22,7 @@ export const invNo = (n: number, base = 'INV') => `${base}/${FY().slice(2)}/${n}
  * Billing set up for a store: GSTIN and address go where Phase 1 keeps them (store_settings; written directly here, as
  * Phase 1's settings form would), the registration type through B5's own route.
  */
+/** Billing ready to sell. Registers are off unless a test turns them on (v2 phase 3 tests do). */
 export async function setupBilling(t: { tenantId: string; cookie: string }, o: { scheme?: 'regular' | 'composition' | 'unregistered'; gstin?: string | null; stateCode?: string; patch?: Record<string, unknown> } = {}) {
   const scheme = o.scheme ?? 'regular';
   const g = o.gstin === undefined ? (scheme === 'unregistered' ? null : gstin('27')) : o.gstin;
@@ -29,7 +30,7 @@ export async function setupBilling(t: { tenantId: string; cookie: string }, o: {
     `INSERT INTO store_settings (tenant_id, address, city, state, postal_code, gstin) VALUES ($1, '12 MG Road', 'Pune', 'Maharashtra', '411001', $2)
      ON CONFLICT (tenant_id) DO UPDATE SET address = EXCLUDED.address, city = EXCLUDED.city, state = EXCLUDED.state, postal_code = EXCLUDED.postal_code, gstin = EXCLUDED.gstin`,
     [t.tenantId, g]);
-  const res = await api(t.cookie, 'PATCH', '/v1/billing/settings', { gstScheme: scheme, ...(o.stateCode ? { stateCode: o.stateCode } : {}), ...(o.patch ?? {}) });
+  const res = await api(t.cookie, 'PATCH', '/v1/billing/settings', { gstScheme: scheme, requireRegister: false, ...(o.stateCode ? { stateCode: o.stateCode } : {}), ...(o.patch ?? {}) });
   expect(res.status, res.text).toBe(200);
   return res.body;
 }
@@ -52,11 +53,16 @@ export async function stockedItem(cookie: string, o: { price: string; gstRate?: 
   return id;
 }
 
-type Line = { variantId: string; qty: string; discountPct?: string; discountReason?: string; unitPriceOverride?: string };
+type Line = { variantId: string; qty: string; discountPct?: string; discountAmount?: string; discountReason?: string; unitPriceOverride?: string };
 
-/** Quote, then sell for exactly the quoted total (cash, unless payments are given). */
+/**
+ * Quote, then sell for exactly the quoted total (cash, unless payments are given). Without a customer the bill is marked
+ * Walk-in, as the cashier would (v2 phase 2: every counter bill names its customer or is Walk-in).
+ */
 export async function sell(cookie: string, lines: Line[], extra: Record<string, unknown> = {}, payments?: { method: string; amount: string; reference?: string }[]) {
-  const q = await api(cookie, 'POST', '/v1/pos/quote', { lines, ...extra });
+  if (!extra.customerId && extra.walkIn === undefined) extra = { ...extra, walkIn: true };
+  const { tillId: _till, ...cart } = extra;   // the till is for the sale (v2 phase 3), not the quote
+  const q = await api(cookie, 'POST', '/v1/pos/quote', { lines, ...cart });
   if (q.status !== 200) return q;
   return api(cookie, 'POST', '/v1/pos/sales', { lines, ...extra, expectedTotal: q.body.total, payments: payments ?? [{ method: 'cash', amount: q.body.total }] }, key());
 }

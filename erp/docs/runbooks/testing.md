@@ -47,7 +47,7 @@ straight at web:
 
 ```sh
 # Session Manager on the staging server
-docker run --rm --network erp_default -v /opt/erp/load:/s:ro grafana/k6 run \
+sudo docker run --rm --network erp_default -v /opt/erp/load:/s:ro grafana/k6 run \
   -e BASE_URL=http://web:3000 -e ORIGIN=https://<staging domain> /s/pos-load.js
 ```
 (copy `tests/load/pos-load.js` to `/opt/erp/load/` first). It signs up 20 test stores. Staging is a t4g.small, half of

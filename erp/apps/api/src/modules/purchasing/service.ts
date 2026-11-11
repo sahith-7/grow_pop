@@ -1,3 +1,4 @@
+import { locIn, pusher, type Scope } from '../outlets/scope.js';
 import type { Tx } from '../../db.js';
 import { fmtMoney } from '../../lib/decimal.js';
 import { nextNumber } from '../../lib/doc-numbers.js';
@@ -226,7 +227,7 @@ export async function postReceipt(tx: Tx, ctx: Ctx, input: ReceiptInput) {
   Object.assign(frac, await wholeUnitErrors(tx, input.lines.map((l) => ({ variantId: l.variantId, qty: l.acceptedQty })), (i) => `lines.${i}.acceptedQty`));
   if (Object.keys(frac).length) throw invalid(frac);
   const locations = new Map<string, { id: string; name: string }>();
-  for (const [i, l] of input.lines.entries()) if (!locations.has(l.locationId)) locations.set(l.locationId, await activeLocation(tx, l.locationId, `lines.${i}.locationId`));
+  for (const [i, l] of input.lines.entries()) if (!locations.has(l.locationId)) locations.set(l.locationId, await activeLocation(tx, l.locationId, `lines.${i}.locationId`, ctx.userId));
 
   // PO: lock it, check every line against what is still outstanding.
   let po: Record<string, any> | null = null;
@@ -316,10 +317,12 @@ export async function getReceipt(tx: Tx, ctx: Ctx, id: string) {
   };
 }
 
-export async function listReceipts(tx: Tx, f: { supplierId?: string; purchaseOrderId?: string; limit: number; after: [string, string] | null }) {
+export async function listReceipts(tx: Tx, f: { supplierId?: string; purchaseOrderId?: string; limit: number; after: [string, string] | null; scope?: Scope }) {
   const params: unknown[] = [f.supplierId ?? null, f.purchaseOrderId ?? null];
   let where = '($1::uuid IS NULL OR g.supplier_id = $1) AND ($2::uuid IS NULL OR g.po_id = $2)';
   if (f.after) { params.push(f.after[0], f.after[1]); where += ' AND (g.posted_at, g.id) < ($3::timestamptz, $4::uuid)'; }
+  // v2 (D115): a receipt is in view where any of its lines went.
+  if (f.scope?.locs) where += ` AND EXISTS (SELECT 1 FROM goods_receipt_lines x WHERE x.receipt_id = g.id AND ${locIn(f.scope, 'x.location_id', pusher(params))})`;
   params.push(f.limit + 1);
   const { rows } = await tx.query(
     `SELECT g.id, g.number, g.posted_at, g.supplier_invoice_no, s.name AS supplier_name, po.number AS po_number,
@@ -341,7 +344,7 @@ export async function listReceipts(tx: Tx, f: { supplierId?: string; purchaseOrd
 export async function postSupplierReturn(tx: Tx, ctx: Ctx, input: SupplierReturnInput) {
   const supplier = await activeSupplier(tx, input.supplierId);
   const variants = await activeVariants(tx, input.lines.map((l) => l.variantId), (i) => `lines.${i}.variantId`);
-  for (const [i, l] of input.lines.entries()) await activeLocation(tx, l.locationId, `lines.${i}.locationId`);
+  for (const [i, l] of input.lines.entries()) await activeLocation(tx, l.locationId, `lines.${i}.locationId`, ctx.userId);
   let receiptNumber: string | null = null;
   if (input.receiptId) {
     const { rows: [g] } = await tx.query('SELECT number, supplier_id FROM goods_receipts WHERE id = $1', [input.receiptId]);
@@ -374,10 +377,11 @@ export async function postSupplierReturn(tx: Tx, ctx: Ctx, input: SupplierReturn
   return { id: doc.id as string, number, postedAt: doc.posted_at as Date, movements: await movementsByIds(tx, posted.map((p) => p.id), ctx.showCost) };
 }
 
-export async function listSupplierReturns(tx: Tx, f: { supplierId?: string; limit: number; after: [string, string] | null }) {
+export async function listSupplierReturns(tx: Tx, f: { supplierId?: string; limit: number; after: [string, string] | null; scope?: Scope }) {
   const params: unknown[] = [f.supplierId ?? null];
   let where = '($1::uuid IS NULL OR r.supplier_id = $1)';
   if (f.after) { params.push(f.after[0], f.after[1]); where += ' AND (r.posted_at, r.id) < ($2::timestamptz, $3::uuid)'; }
+  if (f.scope?.locs) where += ` AND EXISTS (SELECT 1 FROM supplier_return_lines x WHERE x.return_id = r.id AND ${locIn(f.scope, 'x.location_id', pusher(params))})`;
   params.push(f.limit + 1);
   const { rows } = await tx.query(
     `SELECT r.id, r.number, r.posted_at, r.reason, s.name AS supplier_name, g.number AS receipt_number,

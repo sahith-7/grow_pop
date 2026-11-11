@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { money } from '../../../lib/format';
+import { HitRow, searchHits, Suggestions, useSuggest, type SearchHit } from '../../../lib/suggest';
 import { dateTime } from '../../../lib/stock-api';
 import { api, errorText, PAY_METHOD, type ReturnSummary } from '../../../lib/sales-api';
 
@@ -11,6 +12,8 @@ function ReturnsPage() {
   const router = useRouter();
   const params = useSearchParams();
   const [q, setQ] = useState(params.get('q') ?? '');
+  const sg = useSuggest<SearchHit>({ q, load: (t) => searchHits(t, ['return']) });
+  const pickHit = (h: SearchHit) => { sg.quiet(h.title); setQ(h.title); router.replace(`/returns?q=${encodeURIComponent(h.title)}`); };
   const [items, setItems] = useState<ReturnSummary[] | null>(null);
   const [cursors, setCursors] = useState<string[]>([]);
   const [next, setNext] = useState<string | null>(null);
@@ -37,7 +40,11 @@ function ReturnsPage() {
       {error && <div className="ui-alert ui-alert--danger" role="alert"><div className="ui-alert-body">{error}</div></div>}
       <div className="ui-panel">
         <form className="ui-toolbar" role="search" onSubmit={(e) => { e.preventDefault(); router.replace(q.trim() ? `/returns?q=${encodeURIComponent(q.trim())}` : '/returns'); }}>
-          <input className="ui-input ui-search" placeholder="Return, invoice or credit note number" aria-label="Search returns" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="gp-suggest">
+            <input className="ui-input ui-search" placeholder="Return, invoice or credit note number" aria-label="Search returns" value={q} onChange={(e) => setQ(e.target.value)}
+              {...sg.inputProps} onKeyDown={(e) => sg.onKeyDown(e, pickHit)} />
+            <Suggestions s={sg} onPick={pickHit} render={(h) => <HitRow hit={h} />} label="Matching returns" />
+          </div>
         </form>
         {items === null ? <div className="ui-panel-body"><div className="ui-skeleton" style={{ height: 160 }} /></div>
           : items.length === 0 ? <div className="ui-empty"><p className="ui-h3">{params.get('q') ? 'Nothing matches' : 'No returns yet'}</p></div>
@@ -46,10 +53,10 @@ function ReturnsPage() {
               <thead><tr><th scope="col">Return</th><th scope="col">Invoice</th><th scope="col">Reason</th><th scope="col">Refund</th><th scope="col" className="ui-money">Credit</th></tr></thead>
               <tbody>{items.map((r) => (
                 <tr key={r.id}>
-                  <td data-primary><span className="ui-cell-title">{r.number}</span>{r.kind === 'void' && <> <span className="ui-badge ui-badge--danger">Void</span></>}
+                  <td data-primary><span className="ui-cell-title ui-nowrap">{r.number}</span>{r.kind === 'void' && <> <span className="ui-badge ui-badge--danger">Void</span></>}
                     <div className="ui-cell-sub">{dateTime(r.postedAt)}{r.postedBy ? ` · ${r.postedBy}` : ''}</div></td>
-                  <td data-label="Invoice"><Link href={`/invoices/${r.invoice.id}`}>{r.invoice.number}</Link>
-                    <div className="ui-cell-sub">CN <Link href={`/invoices/${r.creditNote.id}`}>{r.creditNote.number}</Link>{r.customer ? ` · ${r.customer}` : ''}</div></td>
+                  <td data-label="Invoice"><Link className="ui-nowrap" href={`/invoices/${r.invoice.id}`}>{r.invoice.number}</Link>
+                    <div className="ui-cell-sub">CN <Link className="ui-nowrap" href={`/invoices/${r.creditNote.id}`}>{r.creditNote.number}</Link>{r.customer ? ` · ${r.customer}` : ''}</div></td>
                   <td data-label="Reason">{r.reason}</td>
                   <td data-label="Refund">{PAY_METHOD[r.refundMethod] ?? r.refundMethod}</td>
                   <td className="ui-money" data-label="Credit">{money(r.refundAmount)}</td>

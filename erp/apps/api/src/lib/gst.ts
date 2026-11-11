@@ -23,6 +23,14 @@ export function rupees(p: bigint): string {
   return `${neg ? '-' : ''}${a / 100n}.${(a % 100n).toString().padStart(2, '0')}`;
 }
 
+/** Paise, or a rupees string ('1139.00'), as text for people: Indian grouping, two decimals ('1,139.00', '12,34,567.50'). */
+export function inr(v: bigint | string): string {
+  const p = typeof v === 'bigint' ? v : paise(v);
+  const neg = p < 0n;
+  const a = neg ? -p : p;
+  return `${neg ? '-' : ''}${(a / 100n).toLocaleString('en-IN')}.${(a % 100n).toString().padStart(2, '0')}`;
+}
+
 /** a / b rounded half away from zero. b > 0. */
 export function divRound(a: bigint, b: bigint): bigint {
   return a >= 0n ? (2n * a + b) / (2n * b) : -((-2n * a + b) / (2n * b));

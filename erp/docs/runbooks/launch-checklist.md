@@ -4,8 +4,8 @@ Tick each line with the date. A line you decide to skip gets a reason, not a bla
 
 ## Code
 
-- [ ] TRIDENT committed to its own repository; CI green on `main` (api, web, audit, images)
-- [ ] INSTALL-TRIDENT section 4 click-through done on staging, not only on a laptop
+- [ ] GroPop committed to its own repository; CI green on `main` (api, web, audit, images)
+- [ ] INSTALL-GROPOP section 4 click-through done on staging, not only on a laptop
 - [ ] Your own owner account has its authenticator app on (D83), and a second console account exists for recovery
 - [ ] No CSP errors in the browser console on any screen
 - [ ] Phone check on a real phone: sign-in, dashboard, menu, stock look-up and picking fit without sideways scrolling

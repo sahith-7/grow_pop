@@ -1,3 +1,4 @@
+import { locIn, pusher, type Scope } from '../outlets/scope.js';
 import type { Tx } from '../../db.js';
 import { parseCsv } from '../../lib/csv.js';
 import { fmtMoney, fmtQty } from '../../lib/decimal.js';
@@ -5,6 +6,7 @@ import { nextNumber } from '../../lib/doc-numbers.js';
 import { appError, audit } from '../../lib/phase1.js';
 import { mapUniqueViolation } from '../../lib/pg-errors.js';
 import { amount, milli, qtyText } from '../../lib/quantity.js';
+import { loadProfile } from '../billing/profile.js';
 import { readFile } from '../files/service.js';
 import { applyCost, type Bucket, type Move, movementsByIds, post } from './ledger.js';
 import { type AdjustmentInput, type TransferInput, WRITEOFF_REASONS } from './schemas.js';
@@ -29,30 +31,49 @@ async function ensureLocations(tx: Tx) {
 
 const locationOut = (r: Record<string, any>) => ({
   id: r.id as string, name: r.name as string, type: r.type as string, isSellable: r.is_sellable as boolean, active: r.active as boolean,
+  outletId: r.outlet_id as string, outletName: (r.outlet_name ?? null) as string | null,
 });
 
 export async function listLocations(tx: Tx) {
   await ensureLocations(tx);
-  const { rows } = await tx.query(`SELECT * FROM locations ORDER BY NOT active, created_at, array_position(ARRAY['shop_floor', 'back_room', 'quarantine'], type), lower(name)`);
+  const { rows } = await tx.query(
+    `SELECT l.*, o.name AS outlet_name FROM locations l JOIN outlets o ON o.id = l.outlet_id
+      ORDER BY NOT l.active, NOT o.is_main, o.created_at, l.created_at, array_position(ARRAY['shop_floor', 'back_room', 'quarantine'], l.type), lower(l.name)`);
   return rows.map(locationOut);
 }
 
-/** The location, which must exist and be active. `field` names the input for the error. */
-export async function activeLocation(tx: Tx, id: string, field: string) {
+/**
+ * The location, which must exist and be active. `field` names the input for the error. With `userId`, it must also be at
+ * an outlet that person works at (v2, D115): staff assigned to outlets post stock only there; owners, managers and staff
+ * assigned nowhere work everywhere.
+ */
+export async function activeLocation(tx: Tx, id: string, field: string, userId?: string) {
   const { rows } = await tx.query('SELECT * FROM locations WHERE id = $1', [id]);
   if (!rows[0] || !rows[0].active) throw invalid({ [field]: ['Location not found or not active'] });
+  if (userId) {
+    const { rows: [u] } = await tx.query(
+      `SELECT u.role IN ('owner', 'manager') OR NOT EXISTS (SELECT 1 FROM user_outlets x WHERE x.user_id = u.id)
+              OR EXISTS (SELECT 1 FROM user_outlets x WHERE x.user_id = u.id AND x.outlet_id = $2) AS ok
+         FROM users u WHERE u.id = $1`, [userId, rows[0].outlet_id]);
+    if (!u?.ok) throw invalid({ [field]: ['This stock room is at an outlet you are not assigned to'] });
+  }
   return locationOut(rows[0]);
 }
 
 const dupLocation = () => appError(409, 'NAME_DUPLICATE', 'Another location already has this name');
 
-export async function createLocation(tx: Tx, ctx: Ctx, input: { name: string; type: string; isSellable?: boolean }) {
+export async function createLocation(tx: Tx, ctx: Ctx, input: { name: string; type: string; isSellable?: boolean; outletId?: string }) {
   const sellable = input.type === 'quarantine' ? false : (input.isSellable ?? true);
+  if (input.outletId) {
+    const { rows: [o] } = await tx.query('SELECT active FROM outlets WHERE id = $1', [input.outletId]);
+    if (!o || !o.active) throw invalid({ outletId: ['Outlet not found or closed'] });
+  }
   try {
+    // Without an outlet, the location belongs to the main one (a database default, D101).
     const { rows } = await tx.query(
-      `INSERT INTO locations (tenant_id, name, type, is_sellable) VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3) RETURNING *`,
-      [input.name, input.type, sellable]);
-    await audit(tx, { actorId: ctx.userId, action: 'location.created', entityType: 'location', entityId: rows[0].id, summary: { name: input.name, type: input.type, sellable } });
+      `INSERT INTO locations (tenant_id, name, type, is_sellable, outlet_id) VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4) RETURNING *`,
+      [input.name, input.type, sellable, input.outletId ?? null]);
+    await audit(tx, { actorId: ctx.userId, action: 'location.created', entityType: 'location', entityId: rows[0].id, summary: { name: input.name, type: input.type, sellable, outletId: rows[0].outlet_id } });
     return locationOut(rows[0]);
   } catch (e) { mapUniqueViolation(e, { locations_name_uq: dupLocation }); }
 }
@@ -79,8 +100,10 @@ export async function patchLocation(tx: Tx, ctx: Ctx, id: string, patch: { name?
 
 // ------------------------------------------------------------------ balances (INV-01/02)
 
-export async function listBalances(tx: Tx, f: { q?: string; locationId?: string; lowStock?: boolean; limit: number; after: [string, string, string] | null }, showCost: boolean) {
+export async function listBalances(tx: Tx, f: { q?: string; locationId?: string; lowStock?: boolean; limit: number; after: [string, string, string] | null; scope?: Scope }, showCost: boolean) {
   const params: unknown[] = [f.locationId ?? null];
+  // v2 (D115): only the stock rooms of the outlet in view.
+  const rooms = f.scope ? locIn(f.scope, 'b.location_id', pusher(params)) : 'true';
   const where = ["v.status = 'active'", "p.status <> 'archived'"];
   if (f.q) {
     params.push(`%${f.q.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`, f.q);
@@ -96,7 +119,7 @@ export async function listBalances(tx: Tx, f: { q?: string; locationId?: string;
                        ORDER BY l.created_at) FILTER (WHERE b.on_hand <> 0 OR b.non_sellable <> 0), '[]') AS at
        FROM product_variants v
        JOIN products p ON p.id = v.product_id
-       LEFT JOIN stock_balances b ON b.variant_id = v.id AND ($1::uuid IS NULL OR b.location_id = $1)
+       LEFT JOIN stock_balances b ON b.variant_id = v.id AND ($1::uuid IS NULL OR b.location_id = $1) AND ${rooms}
        LEFT JOIN locations l ON l.id = b.location_id
       WHERE ${where.join(' AND ')}
       GROUP BY v.id, p.id
@@ -174,7 +197,7 @@ export async function postAdjustment(tx: Tx, ctx: Ctx, input: AdjustmentInput) {
   if (input.lines.some((l) => l.unitCost !== undefined) && !ctx.showCost) throw forbidden('You do not have permission to set cost');
   noDuplicates(input.lines.map((l) => `${l.variantId}|${l.bucket}`), (i) => `lines.${i}.variantId`);
 
-  const location = await activeLocation(tx, input.locationId, 'locationId');
+  const location = await activeLocation(tx, input.locationId, 'locationId', ctx.userId);
   const variants = await activeVariants(tx, input.lines.map((l) => l.variantId), (i) => `lines.${i}.variantId`);
   const number = await nextNumber(tx, 'ADJ');
   const { rows } = await tx.query(
@@ -204,8 +227,10 @@ export async function postAdjustment(tx: Tx, ctx: Ctx, input: AdjustmentInput) {
 export async function postTransfer(tx: Tx, ctx: Ctx, input: TransferInput) {
   if (input.fromLocationId === input.toLocationId) throw invalid({ toLocationId: ['Choose a different location'] });
   noDuplicates(input.lines.map((l) => l.variantId), (i) => `lines.${i}.variantId`);
-  const from = await activeLocation(tx, input.fromLocationId, 'fromLocationId');
+  // Stock leaves from where this person works; it may go to any outlet (D115).
+  const from = await activeLocation(tx, input.fromLocationId, 'fromLocationId', ctx.userId);
   const to = await activeLocation(tx, input.toLocationId, 'toLocationId');
+  await checkOutletTransfer(tx, from.outletId, to.outletId);
   const variants = await activeVariants(tx, input.lines.map((l) => l.variantId), (i) => `lines.${i}.variantId`);
   const number = await nextNumber(tx, 'TRF');
   const { rows } = await tx.query(
@@ -224,6 +249,19 @@ export async function postTransfer(tx: Tx, ctx: Ctx, input: TransferInput) {
   await audit(tx, { actorId: ctx.userId, action: 'stock.transferred', entityType: 'transfer', entityId: doc.id,
     summary: { number, from: from.name, to: to.name, lines: auditLines(posted, variants) } });
   return { id: doc.id as string, number, postedAt: doc.posted_at as Date, movements: await movementsByIds(tx, posted.map((p) => p.id), ctx.showCost) };
+}
+
+/**
+ * Stock moving between outlets under different GSTINs (another state) is a supply between registrations: it needs a tax
+ * invoice and usually an e-way bill, which GroPop doesn't make. Same GSTIN (or no GST registration) is a plain transfer.
+ */
+async function checkOutletTransfer(tx: Tx, fromOutlet: string, toOutlet: string) {
+  if (fromOutlet === toOutlet) return;
+  const [a, b] = [await loadProfile(tx, fromOutlet), await loadProfile(tx, toOutlet)];
+  if (a.seller.gstin !== b.seller.gstin && (a.seller.gstin || b.seller.gstin)) {
+    throw appError(409, 'TRANSFER_NEEDS_INVOICE',
+      `${a.outlet.name} and ${b.outlet.name} have different GSTINs, so moving stock between them is a sale that needs a tax invoice and an e-way bill. GroPop doesn't make those yet; ask your tax adviser.`);
+  }
 }
 
 // ------------------------------------------------------------------ reversal (INV-09)
@@ -256,10 +294,12 @@ export async function reverseDocument(tx: Tx, ctx: Ctx, movementId: string, note
 
 // ------------------------------------------------------------------ reconciliation (INV-09)
 
-export async function reconciliation(tx: Tx) {
+export async function reconciliation(tx: Tx, scope?: Scope) {
+  const params: unknown[] = [];
   const { rows } = await tx.query(
     `SELECT r.*, v.sku, l.name AS location_name FROM v_stock_reconciliation r
-       JOIN product_variants v ON v.id = r.variant_id JOIN locations l ON l.id = r.location_id ORDER BY v.sku LIMIT 200`);
+       JOIN product_variants v ON v.id = r.variant_id JOIN locations l ON l.id = r.location_id
+      WHERE ${scope ? locIn(scope, 'r.location_id', pusher(params)) : 'true'} ORDER BY v.sku LIMIT 200`, params);
   return rows.map((r) => ({
     variantId: r.variant_id, sku: r.sku, locationId: r.location_id, locationName: r.location_name,
     onHand: fmtQty(r.on_hand), ledgerSellable: fmtQty(r.ledger_sellable), nonSellable: fmtQty(r.non_sellable), ledgerNonSellable: fmtQty(r.ledger_non_sellable),
@@ -282,7 +322,7 @@ const cleanAmount = (v: string) => v.replace(/[₹,\s]/g, '').replace(/^rs\.?/i,
  */
 export async function openingImport(tx: Tx, ctx: Ctx, a: { fileId: string; locationId: string; commit: boolean }) {
   if (!ctx.can('stock.adjust')) throw forbidden('You do not have permission to set opening stock');
-  const fallback = await activeLocation(tx, a.locationId, 'locationId');
+  const fallback = await activeLocation(tx, a.locationId, 'locationId', ctx.userId);
   const { body } = await readFile(tx, a.fileId, 'import');
   let table: string[][];
   try { table = parseCsv(body.toString('utf8')); } catch (e) { throw invalid({ fileId: [(e as Error).message] }); }

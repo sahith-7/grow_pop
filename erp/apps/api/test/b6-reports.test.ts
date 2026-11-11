@@ -89,7 +89,7 @@ describe('B6 reports', () => {
     expect(r.headers['content-disposition']).toBe(`attachment; filename="inventory-summary_${today()}.csv"`);
     const lines = r.text.replace(/^﻿/, '').trim().split('\r\n');
     expect(lines[0]).toBe('SKU,Product,Category,On hand,Reserved,Available,Damaged / quarantined,Average cost,Stock value');
-    expect(lines.find((l) => l.startsWith(costedSku))).toBe(`${costedSku},"'=HYPERLINK(""http://evil"")",,10,0,10,0,50.00,500.00`);
+    expect(lines.find((l) => l.startsWith(costedSku))).toBe(`${costedSku},"'=HYPERLINK(""http://evil"")",General,10,0,10,0,50.00,500.00`);
     const { rows } = await owner.query("SELECT summary FROM audit_events WHERE tenant_id = $1 AND action = 'report.exported'", [t.tenantId]);
     expect(rows).toEqual([{ summary: expect.objectContaining({ report: 'inventory-summary', costColumns: true }) }]);
   });

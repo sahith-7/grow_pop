@@ -10,6 +10,7 @@ import { permissionsOf } from '../lib/permissions.js';
 import { open, seal } from '../lib/secret-box.js';
 import { clearSessionCookie, createSession, requires, sessionToken, setSessionCookie, totpSetupNeeded } from '../lib/session.js';
 import { newSecret, otpauthUri, verify as verifyCode } from '../lib/totp.js';
+import { outletScope, visibleOutlets } from './outlets/scope.js';
 import { wooEnv } from './woocommerce/env.js';
 
 // Sign-up, sign-in (password, plus an authenticator code for owners who have one), sign-out, invitations and password
@@ -125,12 +126,21 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.get('/me', { preHandler: requires(undefined, { setup: true }) }, async (req) => {
     const a = req.auth!;
-    const tenant = await tenantTx(a.tenantId, async (c) => (await c.query('SELECT id, name FROM tenants WHERE id = $1', [a.tenantId])).rows[0]);
+    const setup = totpSetupNeeded(a);
+    const { tenant, outlets } = await tenantTx(a.tenantId, async (c) => {
+      const t = (await c.query('SELECT id, name FROM tenants WHERE id = $1', [a.tenantId])).rows[0];
+      if (setup) return { tenant: t, outlets: null };
+      // v2 (D115): the outlets this person may look at, and the one in view (the switcher's cookie, checked).
+      const v = await visibleOutlets(c, a.userId, a.role);
+      const s = await outletScope(c, req);
+      return { tenant: t, outlets: { items: v.items, all: v.everywhere, current: s.outlet?.id ?? null } };
+    });
     return {
       user: { id: a.userId, name: a.name, email: a.email, role: a.role },
       tenant,
-      permissions: totpSetupNeeded(a) ? [] : permissionsOf(a.role),
-      totp: { enabled: a.totpEnabled, setupRequired: totpSetupNeeded(a) },
+      permissions: setup ? [] : permissionsOf(a.role),
+      totp: { enabled: a.totpEnabled, setupRequired: setup },
+      outlets: outlets ?? { items: [], all: true, current: null },
     };
   });
 

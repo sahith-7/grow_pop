@@ -1,3 +1,4 @@
+import { outletScope } from '../outlets/scope.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { tenantTx, type Tx } from '../../db.js';
@@ -9,7 +10,7 @@ import { appError, audit, authOf, can, requires } from '../../lib/phase1.js';
 import { listLocations } from '../inventory/service.js';
 import { voidInput, voidInvoice } from '../returns/service.js';
 import { creditNoteDetail, invoiceDetail } from './documents.js';
-import { loadProfile } from './profile.js';
+import { BILL_FORMATS, loadProfile } from './profile.js';
 
 // Billing & GST settings, invoice series, and reading invoices and credit notes (B5).
 // Routes sit at /v1/billing/* rather than the design's /v1/settings/tax, clear of Phase 1's settings routes (as D33 did).
@@ -30,13 +31,22 @@ const settingsPatch = z.object({
   creditNotePrefix: z.string().trim().regex(/^[A-Za-z0-9-]{1,6}$/, '1 to 6 letters, digits or -'),
   invoiceWebOrders: z.boolean(),
   receiptFooter: z.string().trim().max(300).nullable(),
+  billFormat: z.enum(BILL_FORMATS),
+  requireCustomer: z.boolean(),
+  requireRegister: z.boolean(),
+  expenseLimitEach: z.string().trim().regex(/^\d{1,7}(\.\d{1,2})?$/, 'Enter an amount like 500'),
+  expenseLimitDay: z.string().trim().regex(/^\d{1,7}(\.\d{1,2})?$/, 'Enter an amount like 1000'),
+  returnDays: z.number().int().min(1, 'At least 1 day').max(365, 'At most 365 days').nullable(),
+  returnMoneyBack: z.boolean(),
 }).partial().strict();
 
 const COLUMN: Record<string, string> = {
   gstScheme: 'gst_scheme', stateCode: 'state_code', pricesIncludeTax: 'prices_include_tax', roundOff: 'round_off', posLocationId: 'pos_location_id',
   discountReasonThresholdPct: 'discount_reason_threshold_pct', cashierDiscountLimitPct: 'cashier_discount_limit_pct',
   managerDiscountLimitPct: 'manager_discount_limit_pct', invoicePrefix: 'invoice_prefix', creditNotePrefix: 'credit_note_prefix',
-  invoiceWebOrders: 'invoice_web_orders', receiptFooter: 'receipt_footer',
+  invoiceWebOrders: 'invoice_web_orders', receiptFooter: 'receipt_footer', billFormat: 'bill_format',
+  requireCustomer: 'require_customer', requireRegister: 'require_register', expenseLimitEach: 'expense_limit_each', expenseLimitDay: 'expense_limit_day',
+  returnDays: 'return_days', returnMoneyBack: 'return_money_back',
 };
 
 const seriesInput = z.object({
@@ -59,7 +69,7 @@ async function settingsOut(t: Tx) {
   const p = await loadProfile(t);
   return {
     ready: p.ready, problems: p.problems, gstScheme: p.scheme, stateCode: p.stateCode, seller: p.seller, timezone: p.timezone,
-    ...p.settings, locations: (await listLocations(t)).filter((l) => l.active && l.isSellable).map((l) => ({ id: l.id, name: l.name })),
+    ...p.settings, locations: (await listLocations(t)).filter((l) => l.active && l.isSellable && l.outletId === p.outlet.id).map((l) => ({ id: l.id, name: l.name })),
     states: Object.entries(STATES).map(([code, name]) => ({ code, name })),
   };
 }
@@ -68,12 +78,14 @@ async function seriesOut(t: Tx) {
   const p = await loadProfile(t);
   const current = financialYear(localDate(new Date(), p.timezone));
   const { rows } = await t.query(
-    `SELECT s.*, (s.next_number > s.start_number) AS used FROM invoice_series s ORDER BY s.financial_year DESC, s.doc_type`);
+    `SELECT s.*, (s.next_number > s.start_number) AS used, o.name AS outlet_name, o.is_main FROM invoice_series s JOIN outlets o ON o.id = s.outlet_id
+      ORDER BY s.financial_year DESC, NOT o.is_main, o.created_at, s.doc_type`);
   return {
     currentFinancialYear: current,
     items: rows.map((r) => ({
       id: r.id as string, docType: r.doc_type as string, financialYear: r.financial_year as string, prefix: r.prefix as string,
       startNumber: r.start_number as number, nextNumber: r.next_number as number, nextDocument: `${r.prefix}${r.next_number}`, used: r.used as boolean,
+      outlet: r.outlet_name as string, mainOutlet: r.is_main as boolean,
     })),
     defaults: { invoice: `${p.settings.invoicePrefix}/${current.slice(2)}/`, creditNote: `${p.settings.creditNotePrefix}/${current.slice(2)}/` },
   };
@@ -90,7 +102,13 @@ export async function billingRoutes(app: FastifyInstance) {
       const before = await loadProfile(t);
       if (input.posLocationId) {
         const loc = (await listLocations(t)).find((l) => l.id === input.posLocationId);
-        if (!loc || !loc.active || !loc.isSellable) throw appError(400, 'VALIDATION_ERROR', 'Check the highlighted fields', { posLocationId: ['Pick an active, sellable location'] });
+        if (!loc || !loc.active || !loc.isSellable || loc.outletId !== before.outlet.id) throw appError(400, 'VALIDATION_ERROR', 'Check the highlighted fields', { posLocationId: ['Pick an active, sellable stock room of the main outlet'] });
+      }
+      // The main outlet's bill prefixes must stay different from every other outlet's (v2, D101).
+      for (const [k, col] of [['invoicePrefix', 'invoice_prefix'], ['creditNotePrefix', 'credit_note_prefix']] as const) {
+        if (!input[k]) continue;
+        const { rows: [o] } = await t.query(`SELECT name FROM outlets WHERE NOT is_main AND upper(${col}) = upper($1) LIMIT 1`, [input[k]]);
+        if (o) throw appError(400, 'VALIDATION_ERROR', 'Check the highlighted fields', { [k]: [`${o.name} uses this prefix`] });
       }
       const keys = Object.keys(input) as (keyof typeof input)[];
       if (keys.length) {
@@ -117,13 +135,14 @@ export async function billingRoutes(app: FastifyInstance) {
       const next = `${Number(current.slice(0, 4)) + 1}-${String((Number(current.slice(0, 4)) + 2) % 100).padStart(2, '0')}`;
       if (input.financialYear !== current && input.financialYear !== next) throw appError(400, 'VALIDATION_ERROR', 'Check the highlighted fields', { financialYear: [`Use ${current} or ${next}`] });
       if (`${input.prefix}${input.startAt}`.length > 16) throw appError(400, 'VALIDATION_ERROR', 'Check the highlighted fields', { prefix: ['Prefix and number together must fit in 16 characters'] });
-      const { rows: [s] } = await t.query('SELECT id, next_number, start_number FROM invoice_series WHERE doc_type = $1 AND financial_year = $2 FOR UPDATE', [input.docType, input.financialYear]);
+      // The main outlet's series; another outlet's numbers follow its own prefix.
+      const { rows: [s] } = await t.query('SELECT id, next_number, start_number FROM invoice_series WHERE doc_type = $1 AND financial_year = $2 AND outlet_id = $3 FOR UPDATE', [input.docType, input.financialYear, p.outlet.id]);
       if (s && s.next_number > s.start_number) throw appError(409, 'SERIES_IN_USE', 'This series already has documents; its numbers cannot change');
       if (s) await t.query('UPDATE invoice_series SET prefix = $2, start_number = $3, next_number = $3 WHERE id = $1', [s.id, input.prefix, input.startAt]);
       else {
         await t.query(
-          `INSERT INTO invoice_series (tenant_id, doc_type, financial_year, prefix, start_number, next_number, created_by)
-           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $4, $5)`, [input.docType, input.financialYear, input.prefix, input.startAt, authOf(req).userId]);
+          `INSERT INTO invoice_series (tenant_id, outlet_id, doc_type, financial_year, prefix, start_number, next_number, created_by)
+           VALUES (current_setting('app.tenant_id')::uuid, $6, $1, $2, $3, $4, $4, $5)`, [input.docType, input.financialYear, input.prefix, input.startAt, authOf(req).userId, p.outlet.id]);
       }
       await audit(t, { actorId: authOf(req).userId, action: 'billing.series_set', entityType: 'invoice_series', summary: input });
       return seriesOut(t);
@@ -141,6 +160,9 @@ export async function billingRoutes(app: FastifyInstance) {
       const where: string[] = ['$1::text IS NOT NULL'];
       const add = (sql: string, v: unknown) => { params.push(v); where.push(sql.replaceAll('?', `$${params.length}`)); };
       const d = q.type === 'invoice' ? 'i' : 'c';
+      // v2 (D115): the outlet in view, by the series that numbered the document.
+      const scope = await outletScope(t, req);
+      if (scope.ids) add(`${d}.series_id IN (SELECT ss.id FROM invoice_series ss WHERE ss.outlet_id = ANY(?::uuid[]))`, scope.ids);
       if (q.q) add(`(${d}.number ILIKE '%' || ? || '%' OR i.buyer->>'name' ILIKE '%' || ? || '%' OR i.buyer->>'phone' LIKE '%' || ? || '%' OR o.number ILIKE '%' || ? || '%')`, q.q.replace(/[%_\\]/g, '\\$&'));
       if (q.from) add(`(${d}.issued_at AT TIME ZONE $1::text)::date >= ?::date`, q.from);
       if (q.to) add(`(${d}.issued_at AT TIME ZONE $1::text)::date <= ?::date`, q.to);
@@ -174,7 +196,7 @@ export async function billingRoutes(app: FastifyInstance) {
       const p = await loadProfile(t);
       const doc = (await invoiceDetail(t, id, p.timezone)) ?? (await creditNoteDetail(t, id, p.timezone));
       if (!doc) throw appError(404, 'NOT_FOUND', 'Invoice not found');
-      return { ...doc, receiptFooter: p.settings.receiptFooter, can: { void: can(req, 'invoice.void'), return: can(req, 'return.manage') } };
+      return { ...doc, receiptFooter: p.settings.receiptFooter, billFormat: p.settings.billFormat, can: { void: can(req, 'invoice.void'), return: can(req, 'return.manage') } };
     });
   });
 
@@ -183,7 +205,7 @@ export async function billingRoutes(app: FastifyInstance) {
     if (req.headers['idempotency-key'] === undefined) throw appError(400, 'VALIDATION_ERROR', 'Idempotency-Key header is required');
     const input = voidInput.parse(req.body);
     const out = await tx(req, (t) => idempotent(t, req.headers['idempotency-key'], { id, ...input }, async () =>
-      ({ status: 200, body: await voidInvoice(t, authOf(req).userId, id, input) })));
+      ({ status: 200, body: await voidInvoice(t, { userId: authOf(req).userId, role: authOf(req).role }, id, input) })));
     return out.body;
   });
 }

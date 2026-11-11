@@ -1,3 +1,4 @@
+import { orderIn, outletScope, pusher } from '../outlets/scope.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { tenantTx, type Tx } from '../../db.js';
@@ -99,6 +100,10 @@ export async function salesRoutes(app: FastifyInstance) {
       const where: string[] = [];
       const params: unknown[] = [];
       const add = (sql: string, v: unknown) => { params.push(v); where.push(sql.replaceAll('?', `$${params.length}`)); };
+      // v2 (D115): the outlet in view; website orders count at the main outlet.
+      const scope = await outletScope(t, req);
+      const inView = orderIn(scope, 'o', pusher(params));
+      where.push(inView);
       if (q.channel) add('o.channel = ?', q.channel);
       if (q.status === 'attention') where.push("o.status IN ('stock_exception', 'needs_review')");
       else if (q.status) add('o.status = ?', q.status);
@@ -110,8 +115,10 @@ export async function salesRoutes(app: FastifyInstance) {
         `SELECT o.*, (SELECT coalesce(sum(qty), 0) FROM sales_order_lines l WHERE l.order_id = o.id) AS item_count
            FROM sales_orders o ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY o.placed_at DESC, o.id DESC LIMIT $${params.length}`, params);
       const page = rows.slice(0, q.limit);
+      const cp: unknown[] = [];
       const { rows: [counts] } = await t.query(
-        "SELECT count(*) FILTER (WHERE status IN ('stock_exception', 'needs_review'))::int AS attention, count(*) FILTER (WHERE status = 'ready_to_pick')::int AS ready FROM sales_orders");
+        `SELECT count(*) FILTER (WHERE status IN ('stock_exception', 'needs_review'))::int AS attention, count(*) FILTER (WHERE status = 'ready_to_pick')::int AS ready
+           FROM sales_orders o WHERE ${orderIn(scope, 'o', pusher(cp))}`, cp);
       return {
         items: page.map(summary),
         counts,

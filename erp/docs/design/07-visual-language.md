@@ -15,8 +15,10 @@ Part of the Phase 2 design pack. Status: **for approval**. Like the rest of Phas
 
 ## Decisions (D1)
 
+> **v2 (2026-11-08, D87, D92):** the product is now **GroPop** and the app uses the v2 look: action blue #1769D2, GroPop navy #0B2447, wine #8B2E2E (logo only), soft KPI tile colours, Plus Jakarta Sans (self-hosted), a top bar with search, + New and the POS button, and a grouped side menu. The tokens are in `apps/web/src/styles/tokens.css`. The text below describes the original Phase 2 "Ledger" direction and is kept as history.
+
 1. **Direction A "Ledger"** (ink blue #2F45B8, marigold accent, IBM Plex). Recommended. B "Haat" and C "Counter" are shown on the reference page and rejected for stated reasons.
-2. **Name: TRIDENT** (chosen 2026-10-21; replaced the working name "TRIDENT"). Not cleared yet: run an IP India trademark search in classes 9 and 42 and check the domains before using it publicly. The name lives in `apps/web/lib/brand.ts`, `APP_NAME` and `site/site.config.json`.
+2. **Name: TRIDENT** (chosen 2026-10-21; replaced the working name "Tarazu"). Not cleared yet: run an IP India trademark search in classes 9 and 42 and check the domains before using it publicly. The name lives in `apps/web/lib/brand.ts`, `APP_NAME` and `site/site.config.json`.
 3. **Not VasyERP's look.** Their exact colours/fonts were never available, and copying a competitor's trade dress is a legal risk. This is an original identity.
 4. **Dark mode deferred** past V1. Tokens exist so it is cheap later.
 5. **POS not supported on phones** in V1. Counter screens target a 10-inch tablet or desktop with a keyboard-wedge scanner. Phones get stock lookup and pick lists.

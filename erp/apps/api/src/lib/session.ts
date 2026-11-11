@@ -26,9 +26,12 @@ export async function createSession(c: Tx, tenantId: string, userId: string, req
   return token;
 }
 
+// v2 (D115): the outlet switcher's choice (modules/outlets/scope.ts) does not outlive the sign-in: every sign-in, and
+// every sign-out, starts back at "all outlets", so the next person on a shared computer doesn't inherit a filter.
+const OUTLET_COOKIE = 'gp_outlet';
 export const setSessionCookie = (reply: FastifyReply, token: string) =>
-  reply.setCookie(COOKIE, token, { httpOnly: true, secure: isProd, sameSite: 'lax', path: '/', maxAge: IDLE_HOURS * 3600 });
-export const clearSessionCookie = (reply: FastifyReply) => reply.clearCookie(COOKIE, { path: '/' });
+  reply.setCookie(COOKIE, token, { httpOnly: true, secure: isProd, sameSite: 'lax', path: '/', maxAge: IDLE_HOURS * 3600 }).clearCookie(OUTLET_COOKIE, { path: '/' });
+export const clearSessionCookie = (reply: FastifyReply) => reply.clearCookie(COOKIE, { path: '/' }).clearCookie(OUTLET_COOKIE, { path: '/' });
 export const sessionToken = (req: FastifyRequest) => req.cookies[COOKIE];
 
 async function authenticate(req: FastifyRequest) {

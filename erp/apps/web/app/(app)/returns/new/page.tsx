@@ -4,8 +4,13 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { money } from '../../../../lib/format';
+import { QtyStepper } from '../../../../lib/qty';
+import { HitRow, searchHits, Suggestions, useSuggest, type SearchHit } from '../../../../lib/suggest';
 import { idemKey, type StockMeta } from '../../../../lib/stock-api';
 import { ApiError, api, CONDITION, errorText, PAY_METHOD, type InvoiceSummary, type TaxDocument } from '../../../../lib/sales-api';
+import type { Till } from '../../../../lib/cash-api';
+import { useMe } from '../../../../lib/me';
+import { roomsInView } from '../../../../lib/outlet-scope';
 
 // Customer return (J12): find the invoice, pick what comes back and its condition, choose how the money goes back.
 // The server works out the credit in proportion to the invoice line and issues the credit note.
@@ -17,16 +22,23 @@ function NewReturn() {
   const router = useRouter();
   const params = useSearchParams();
   const [number, setNumber] = useState('');
+  const sg = useSuggest<SearchHit>({ q: number, load: (t) => searchHits(t, ['invoice']) });
+  const pickHit = (h: SearchHit) => { sg.quiet(h.title); setNumber(h.title); router.replace(`/returns/new?invoice=${h.id}`); };
   const [inv, setInv] = useState<TaxDocument | null>(null);
   const [picks, setPicks] = useState<Record<string, Pick>>({});
   const [reason, setReason] = useState('');
   const [refund, setRefund] = useState('cash');
   const [locationId, setLocationId] = useState('');
   const [locations, setLocations] = useState<{ id: string; name: string }[]>([]);
+  const view = useMe().outlets;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [key, setKey] = useState(idemKey);
+  // Cash given back leaves a till's drawer (v2, D110). With one register open the server picks it; with several, say which.
+  const [openTills, setOpenTills] = useState<Till[]>([]);
+  const [tillId, setTillId] = useState('');
+  useEffect(() => { api<{ items: Till[] }>('/tills').then(({ data }) => setOpenTills(data.items.filter((t) => t.open))).catch(() => {}); }, []);
 
   const open = async (id: string) => {
     setError('');
@@ -38,8 +50,9 @@ function NewReturn() {
     } catch (e) { setError(errorText(e)); }
   };
   useEffect(() => { const id = params.get('invoice'); if (id) open(id); }, [params]);
-  // Locations are only listed to people who can see stock; everyone else returns to the sale's own location.
-  useEffect(() => { api<StockMeta>('/stock/meta').then(({ data }) => setLocations(data.locations.filter((l) => l.active))).catch(() => {}); }, []);
+  // Locations are only listed to people who can see stock; everyone else returns to the sale's own location. v2 (D115):
+  // the rooms at the outlet in view, where the goods are being taken back.
+  useEffect(() => { api<StockMeta>('/stock/meta').then(({ data }) => setLocations(roomsInView(view, data.locations.filter((l) => l.active)))).catch(() => {}); }, []);
 
   const find = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +76,7 @@ function NewReturn() {
     try {
       const { data } = await api<{ creditNoteId: string }>('/returns', {
         method: 'POST', headers: key,
-        body: { invoiceId: inv.id, reason, refundMethod: refund, ...(locationId ? { locationId } : {}), lines: chosen.map(([invoiceLineId, p]) => ({ invoiceLineId, qty: p.qty, condition: p.condition })) },
+        body: { invoiceId: inv.id, reason, refundMethod: refund, ...(locationId ? { locationId } : {}), ...(tillId && (refund === 'cash' || refund === 'original') ? { tillId } : {}), lines: chosen.map(([invoiceLineId, p]) => ({ invoiceLineId, qty: p.qty, condition: p.condition })) },
       });
       router.push(`/invoices/${data.creditNoteId}`);
     } catch (e) { setError(errorText(e)); if (e instanceof ApiError) setFieldErrors(e.fieldErrors); setBusy(false); }
@@ -76,7 +89,11 @@ function NewReturn() {
       {error && <div className="ui-alert ui-alert--danger" role="alert"><div className="ui-alert-body">{error}</div></div>}
 
       <form className="ui-toolbar" onSubmit={find}>
-        <input className="ui-input ui-search" placeholder="Invoice number from the bill, e.g. INV/26-27/123" aria-label="Invoice number" value={number} onChange={(e) => setNumber(e.target.value)} autoFocus={!params.get('invoice')} />
+        <div className="gp-suggest">
+          <input className="ui-input ui-search" placeholder="Invoice number, customer name or phone" aria-label="Invoice number" value={number} onChange={(e) => setNumber(e.target.value)} autoFocus={!params.get('invoice')}
+            {...sg.inputProps} onKeyDown={(e) => sg.onKeyDown(e, pickHit)} />
+          <Suggestions s={sg} onPick={pickHit} render={(h) => <HitRow hit={h} />} label="Matching invoices" />
+        </div>
         <button className="ui-btn" type="submit">Find invoice</button>
       </form>
 
@@ -98,8 +115,8 @@ function NewReturn() {
                       <td className="ui-num" data-label="Sold">{l.qty}</td>
                       <td className="ui-num" data-label="Can return">{l.returnableQty}</td>
                       <td data-label="Return">
-                        <input className="ui-input" style={{ width: 90 }} inputMode="decimal" aria-label={`Quantity of ${l.description} to return`} disabled={left <= 0}
-                          value={p?.qty ?? ''} placeholder="0" onChange={(e) => set(l.id, { qty: e.target.value })} aria-invalid={!!err} />
+                        <QtyStepper label={`Quantity of ${l.description} to return`} disabled={left <= 0} max={left}
+                          value={p?.qty ?? ''} placeholder="0" onChange={(v) => set(l.id, { qty: v })} invalid={!!err} />
                         {left > 0 && <button className="ui-btn ui-btn--sm" type="button" onClick={() => set(l.id, { qty: l.returnableQty! })}>All</button>}
                         {err && <div className="ui-error">{err}</div>}
                       </td>
@@ -121,10 +138,19 @@ function NewReturn() {
                 <input className="ui-input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. wrong size" aria-invalid={!!fieldErrors.reason} />
                 {fieldErrors.reason && <span className="ui-error">{fieldErrors.reason[0]}</span>}</label>
               <label className="ui-field"><span className="ui-label">Money back</span>
-                <select className="ui-select" value={refund} onChange={(e) => setRefund(e.target.value)}>
+                <select className="ui-select" value={refund} onChange={(e) => setRefund(e.target.value)} aria-invalid={!!fieldErrors.refundMethod}>
                   {['cash', 'upi', 'card', 'other', 'original', 'none'].map((m) => <option key={m} value={m}>{PAY_METHOD[m]}</option>)}
                 </select>
-                <span className="ui-help">“Original payment” means the refund goes back through the shop or gateway it was paid with; the ERP only records it.</span></label>
+                {fieldErrors.refundMethod && <span className="ui-error">{fieldErrors.refundMethod[0]}</span>}
+                <span className="ui-help">“Original payment”: on a counter bill, the way it was paid (cash comes out of the drawer); on a web order, back through the shop’s payment gateway, which the ERP only records.</span></label>
+              {(refund === 'cash' || refund === 'original') && openTills.length > 1 && (
+                <label className="ui-field"><span className="ui-label">Cash comes out of</span>
+                  <select className="ui-select" value={tillId} onChange={(e) => setTillId(e.target.value)} aria-invalid={!!fieldErrors.tillId}>
+                    <option value="">Choose the till…</option>
+                    {openTills.map((t) => <option key={t.id} value={t.id}>{t.name}{new Set(openTills.map((x) => x.outletId)).size > 1 ? ` · ${t.outlet}` : ''}</option>)}
+                  </select>
+                  {fieldErrors.tillId && <span className="ui-error">{fieldErrors.tillId[0]}</span>}</label>
+              )}
               {locations.length > 1 && (
                 <label className="ui-field"><span className="ui-label">Goods go back to</span>
                   <select className="ui-select" value={locationId} onChange={(e) => setLocationId(e.target.value)}>

@@ -6,6 +6,9 @@ import { Suspense, useEffect, useState } from 'react';
 import { ApiError, api, errorText, fieldError, idemKey, noEnterSubmit, type Picked, type PostedDocument, type Receipt, type StockMeta } from '../../../../../lib/stock-api';
 import { ItemCell, ItemPicker } from '../../../stock/_components/item-picker';
 import { useSuppliers } from '../../_components/use-suppliers';
+import { QtyStepper } from '../../../../../lib/qty';
+import { useMe } from '../../../../../lib/me';
+import { roomsInView } from '../../../../../lib/outlet-scope';
 
 interface Line { key: string; item: Picked; locationId: string; bucket: 'sellable' | 'non_sellable'; qty: string }
 
@@ -13,6 +16,7 @@ interface Line { key: string; item: Picked; locationId: string; bucket: 'sellabl
 function SupplierReturnPage() {
   const router = useRouter();
   const receiptId = useSearchParams().get('receipt');
+  const view = useMe().outlets;
   const { suppliers } = useSuppliers();
   const [meta, setMeta] = useState<StockMeta | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -33,7 +37,9 @@ function SupplierReturnPage() {
   }, [receiptId]);
 
   const set = (i: number, patch: Partial<Line>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
-  const defaultLocation = () => meta?.locations.find((l) => l.active && l.type === 'quarantine')?.id ?? meta?.locations.find((l) => l.active)?.id ?? '';
+  // v2 (D115): stock goes back from a room at the outlet in view (a receipt's own room is kept on its lines).
+  const here = meta ? roomsInView(view, meta.locations.filter((l) => l.active)) : [];
+  const defaultLocation = () => here.find((l) => l.type === 'quarantine')?.id ?? here[0]?.id ?? '';
   const pick = (item: Picked) => setLines((ls) => [...ls, { key: crypto.randomUUID(), item, locationId: defaultLocation(), bucket: 'non_sellable', qty: '1' }]);
 
   const submit = async (e: React.FormEvent) => {
@@ -87,12 +93,12 @@ function SupplierReturnPage() {
             <tbody>{lines.map((l, i) => (
               <tr key={l.key}>
                 <td><ItemCell item={l.item} />{err(i, 'variantId') && <div className="ui-error">{err(i, 'variantId')}</div>}</td>
-                <td><select className="ui-select" aria-label="Location" value={l.locationId} onChange={(e) => set(i, { locationId: e.target.value })}>{active.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></td>
+                <td><select className="ui-select" aria-label="Location" value={l.locationId} onChange={(e) => set(i, { locationId: e.target.value })}>{active.filter((x) => x.id === l.locationId || here.some((h) => h.id === x.id)).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></td>
                 <td><select className="ui-select" aria-label="Stock type" value={l.bucket} onChange={(e) => set(i, { bucket: e.target.value as Line['bucket'] })}>
                   <option value="non_sellable">Damaged</option><option value="sellable">Sellable</option>
                 </select></td>
                 <td className="ui-num">
-                  <input className="ui-input ui-input--num" style={{ width: 90 }} inputMode="decimal" value={l.qty} aria-label="Quantity" aria-invalid={!!err(i, 'qty')} onChange={(e) => set(i, { qty: e.target.value })} />
+                  <QtyStepper value={l.qty} onChange={(v) => set(i, { qty: v })} label={`Quantity of ${l.item.sku}`} invalid={!!err(i, 'qty')} />
                   {err(i, 'qty') && <div className="ui-error">{err(i, 'qty')}</div>}
                 </td>
                 <td><button className="ui-btn ui-btn--sm ui-btn--ghost" type="button" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>Remove</button></td>

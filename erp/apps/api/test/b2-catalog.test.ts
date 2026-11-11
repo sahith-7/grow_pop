@@ -162,12 +162,19 @@ describe('barcodes and lookup (AC-04)', () => {
     const bySku = await api(T.cookie, 'GET', '/v1/lookup?code=j-32');
     expect(bySku.body.matchedOn).toBe('sku');
     expect(bySku.body.productId).toBe(res.body.id);
-    expect((await api(B.cookie, 'GET', `/v1/lookup?code=${gen.body.codes[0]}`)).status).toBe(404);
+    // Each store has its own in-store series (and since v2 every product gets a code), so B may hold the same number:
+    // it must never find T's product.
+    const other = await api(B.cookie, 'GET', `/v1/lookup?code=${gen.body.codes[0]}`);
+    expect(other.status === 404 || other.body.productId !== res.body.id).toBe(true);
   });
 
   it('builds label rows with barcode or SKU fallback', async () => {
     const res = await api(A.cookie, 'POST', '/v1/products', simple('LBL-1', { mrp: '120' }));
-    const { body } = await api(A.cookie, 'POST', '/v1/labels', { items: [{ variantId: res.body.variants[0].id, copies: 3 }] });
+    const v = res.body.variants[0];
+    // v2 (D88): a new product always gets a barcode; imported ones may have none, so take it off to test the fallback.
+    expect(v.barcode).toMatch(/^\d{13}$|^[A-Za-z0-9-]+$/);
+    expect((await api(A.cookie, 'PATCH', `/v1/variants/${v.id}`, { barcode: null }, { 'if-match': `"${v.version}"` })).status).toBe(200);
+    const { body } = await api(A.cookie, 'POST', '/v1/labels', { items: [{ variantId: v.id, copies: 3 }] });
     expect(body.labels[0]).toMatchObject({ code: 'LBL-1', codeSource: 'sku', copies: 3, price: '100.00', mrp: '120.00' });
   });
 });

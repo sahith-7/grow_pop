@@ -5,11 +5,15 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ApiError, api, errorText, fieldError, idemKey, noEnterSubmit, type Picked, type PostedDocument, type StockMeta } from '../../../../lib/stock-api';
 import { ItemCell, ItemPicker } from '../_components/item-picker';
+import { QtyStepper } from '../../../../lib/qty';
+import { useMe } from '../../../../lib/me';
+import { roomsInView } from '../../../../lib/outlet-scope';
 
 interface Line { item: Picked; qty: string }
 
 export default function TransferPage() {
   const router = useRouter();
+  const view = useMe().outlets;
   const [meta, setMeta] = useState<StockMeta | null>(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -23,9 +27,10 @@ export default function TransferPage() {
   useEffect(() => {
     api<StockMeta>('/stock/meta').then(({ data }) => {
       setMeta(data);
-      const active = data.locations.filter((l) => l.active);
-      setFrom(active.find((l) => l.type === 'back_room')?.id ?? active[0]?.id ?? '');
-      setTo(active.find((l) => l.type === 'shop_floor')?.id ?? active[1]?.id ?? '');
+      // v2 (D115): stock leaves a room at the outlet in view; it may go to any outlet.
+      const here = roomsInView(view, data.locations.filter((l) => l.active));
+      setFrom(here.find((l) => l.type === 'back_room')?.id ?? here[0]?.id ?? '');
+      setTo(here.find((l) => l.type === 'shop_floor')?.id ?? here[1]?.id ?? '');
     }).catch((e) => setError(errorText(e)));
   }, []);
 
@@ -50,13 +55,14 @@ export default function TransferPage() {
 
   if (!meta) return <div className="ui-content">{error ? <div className="ui-error">{error}</div> : <div className="ui-skeleton" style={{ height: 200 }} />}</div>;
   const active = meta.locations.filter((l) => l.active);
+  const here = roomsInView(view, active);
 
   return (
     <form className="ui-content" onSubmit={submit} onKeyDown={noEnterSubmit}>
       <div className="ui-page-header"><div><Link className="ui-caption" href="/stock">Stock /</Link><h1 className="ui-h1">Transfer stock</h1></div></div>
       <div className="ui-panel"><div className="ui-panel-body ui-form-grid">
         <label className="ui-field"><span className="ui-label">From</span>
-          <select className="ui-select" value={from} onChange={(e) => setFrom(e.target.value)}>{active.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select>
+          <select className="ui-select" value={from} onChange={(e) => setFrom(e.target.value)}>{here.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select>
         </label>
         <label className="ui-field"><span className="ui-label">To</span>
           <select className="ui-select" value={to} onChange={(e) => setTo(e.target.value)} aria-invalid={!!fieldError(errors, 'toLocationId')}>{active.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select>
@@ -77,8 +83,8 @@ export default function TransferPage() {
               <tr key={l.item.variantId}>
                 <td><ItemCell item={l.item} /></td>
                 <td className="ui-num">
-                  <input className="ui-input ui-input--num" style={{ width: 100 }} inputMode="decimal" value={l.qty} aria-label="Quantity" aria-invalid={!!fieldError(errors, `lines.${i}.qty`)}
-                    onChange={(e) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, qty: e.target.value.trim() } : x)))} />
+                  <QtyStepper value={l.qty} label={`Quantity of ${l.item.sku}`} invalid={!!fieldError(errors, `lines.${i}.qty`)}
+                    onChange={(v) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, qty: v } : x)))} />
                   {fieldError(errors, `lines.${i}.qty`) && <div className="ui-error">{fieldError(errors, `lines.${i}.qty`)}</div>}
                 </td>
                 <td><button className="ui-btn ui-btn--sm ui-btn--ghost" type="button" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>Remove</button></td>

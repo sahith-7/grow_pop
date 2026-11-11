@@ -5,21 +5,31 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, api, errorText, type Product, type Ref, type Unit, type Variant } from '../../../../lib/catalog-api';
 import { attrLabel } from '../../../../lib/format';
+import { Icon } from '../../../../lib/icons';
+import { useCan, useMe } from '../../../../lib/me';
+import { roomsInView } from '../../../../lib/outlet-scope';
+import type { Location } from '../../../../lib/stock-api';
 import { ImagesPanel } from './images-panel';
 
 export interface Meta { units: Unit[]; gstRates: string[]; attributeKeys: string[]; can: { write: boolean; seeCost: boolean; export: boolean } }
 
+type WeightUnit = 'g' | 'kg' | 'ml' | 'l';
+const WEIGHT_UNITS: WeightUnit[] = ['g', 'kg', 'ml', 'l'];
+
 interface Row {
   key: string; id?: string; version?: number; status?: 'active' | 'archived';
   attributes: Record<string, string>; sku: string; barcode: string; price: string; mrp: string; cost: string; reorderLevel: string;
+  netWeight: string; netWeightUnit: WeightUnit; openingQty: string;
 }
 
 const toRow = (v: Variant): Row => ({
   key: v.id, id: v.id, version: v.version, status: v.status, attributes: v.attributes, sku: v.sku, barcode: v.barcode ?? '',
   price: v.price, mrp: v.mrp ?? '', cost: v.cost ?? '', reorderLevel: v.reorderLevel ?? '',
+  netWeight: v.netWeight ?? '', netWeightUnit: v.netWeightUnit ?? 'g', openingQty: '0',
 });
 const blankRow = (attributes: Record<string, string> = {}): Row => ({
   key: crypto.randomUUID(), attributes, sku: '', barcode: '', price: '', mrp: '', cost: '', reorderLevel: '',
+  netWeight: '', netWeightUnit: 'g', openingQty: '0',
 });
 /** Thrown after an error has already been shown next to its field. */
 class Shown extends Error {}
@@ -27,11 +37,49 @@ const skuPart = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(
 const nullable = (s: string) => (s.trim() === '' ? null : s.trim());
 
 function variantBody(r: Row, seeCost: boolean, includeAttributes: boolean) {
+  const netWeight = nullable(r.netWeight);
   return {
     sku: r.sku.trim(), barcode: nullable(r.barcode), price: r.price.trim(), mrp: nullable(r.mrp), reorderLevel: nullable(r.reorderLevel),
+    netWeight, netWeightUnit: netWeight ? r.netWeightUnit : null,
     ...(seeCost ? { cost: nullable(r.cost) } : {}),
     ...(includeAttributes ? { attributes: r.attributes } : {}),
   };
+}
+
+/** v2 (D88): add a category or brand without leaving the product form. The new one is selected at once. */
+function QuickAdd({ kind, parents, onAdded }: { kind: 'categories' | 'brands'; parents?: Ref[]; onAdded: (r: Ref) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [parentId, setParentId] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const what = kind === 'categories' ? 'category' : 'brand';
+  const add = async () => {
+    if (!name.trim()) { setError(`Type the ${what} name`); return; }
+    setBusy(true); setError('');
+    try {
+      const { data } = await api<Ref>(`/${kind}`, { method: 'POST', body: kind === 'categories' ? { name: name.trim(), parentId: parentId || null } : { name: name.trim() } });
+      onAdded(data); setName(''); setParentId(''); setOpen(false);
+    } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+  };
+  if (!open) return <button type="button" className="gp-link-btn" onClick={() => setOpen(true)}><Icon name="plus" size={14} /> New {what}</button>;
+  return (
+    <div className="gp-quick-add">
+      <input className="ui-input" aria-label={`New ${what} name`} placeholder={`New ${what} name`} value={name} maxLength={80} autoFocus
+        onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } if (e.key === 'Escape') setOpen(false); }} />
+      {parents && (
+        <select className="ui-select" aria-label="Under" value={parentId} onChange={(e) => setParentId(e.target.value)}>
+          <option value="">Top level</option>
+          {parents.filter((p) => !p.parentId && !p.archivedAt).map((p) => <option key={p.id} value={p.id}>Under {p.name}</option>)}
+        </select>
+      )}
+      <div className="gp-quick-add-actions">
+        <button type="button" className="ui-btn ui-btn--sm ui-btn--primary" onClick={add} disabled={busy}>{busy ? 'Adding…' : 'Add'}</button>
+        <button type="button" className="ui-btn ui-btn--sm ui-btn--ghost" onClick={() => { setOpen(false); setError(''); }}>Cancel</button>
+      </div>
+      {error && <span className="ui-error" role="alert">{error}</span>}
+    </div>
+  );
 }
 
 /** `onSaved` replaces the form with fresh data; `onImagesChanged` must not, so unsaved field edits survive an upload. */
@@ -41,8 +89,13 @@ export function ProductForm({ product, meta, onSaved, onImagesChanged }: {
   const router = useRouter();
   const editing = Boolean(product);
   const readOnly = !meta.can.write || product?.status === 'archived';
+  // Opening stock is a stock adjustment, so it needs that permission; without it the column is not shown at all.
+  const canOpen = useCan('stock.adjust') && !editing;
   const [cats, setCats] = useState<Ref[]>([]);
   const [brands, setBrands] = useState<Ref[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [openingLocationId, setOpeningLocationId] = useState('');
+  const view = useMe().outlets;
   const [f, setF] = useState({
     name: product?.name ?? '', description: product?.description ?? '', categoryId: product?.categoryId ?? '', brandId: product?.brandId ?? '',
     unitCode: product?.unitCode ?? 'NOS', type: product?.type ?? 'simple', status: product?.status === 'active' ? 'active' : 'draft',
@@ -64,9 +117,17 @@ export function ProductForm({ product, meta, onSaved, onImagesChanged }: {
     api<{ items: Ref[] }>('/categories').then((r) => setCats(r.data.items)).catch(() => {});
     api<{ items: Ref[] }>('/brands').then((r) => setBrands(r.data.items)).catch(() => {});
   }, []);
+  useEffect(() => {
+    if (!canOpen) return;
+    api<{ items: Location[] }>('/locations').then((r) => {
+      const active = roomsInView(view, r.data.items.filter((l) => l.active));   // v2 (D115): opening stock goes in at the outlet in view
+      setLocations(active);
+      setOpeningLocationId((cur) => cur || (active.find((l) => l.type === 'shop_floor') ?? active[0])?.id || '');
+    }).catch(() => {});
+  }, [canOpen]);
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
-  const setRow = (key: string, patch: Partial<Row>) => setRows(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const setRow = (key: string, patch: Partial<Row>) => setRows((all) => all.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const err = (k: string) => errors[k]?.[0];
   const attrKeys = Object.keys(options).filter((k) => options[k] !== undefined);
 
@@ -85,10 +146,14 @@ export function ProductForm({ product, meta, onSaved, onImagesChanged }: {
     setBanner('');
   };
 
+  /** v2 (D88): the next code in the store's own series (AC1204 → AC1205), or an in-store EAN-13 when there is none yet.
+   *  Codes already typed on this form are skipped, so several rows can be filled before saving. */
   const generateBarcode = async (key: string) => {
     try {
-      const { data } = await api<{ codes: string[] }>('/barcodes/generate', { method: 'POST', body: { count: 1 } });
-      setRow(key, { barcode: data.codes[0] });
+      const { data } = await api<{ codes: string[] }>('/barcodes/next', { method: 'POST', body: { count: Math.min(200, rows.length) } });
+      const onForm = new Set(rows.map((r) => r.barcode.trim()).filter(Boolean));
+      const code = data.codes.find((c) => !onForm.has(c));
+      if (code) setRow(key, { barcode: code });
     } catch (e) { setBanner(errorText(e)); }
   };
 
@@ -100,11 +165,31 @@ export function ProductForm({ product, meta, onSaved, onImagesChanged }: {
     } else setBanner(errorText(e));
   };
 
+  /** Checks the API would also make, shown before sending so the person sees every problem at once. */
+  const checkCreate = () => {
+    const fe: Record<string, string[]> = {};
+    if (!f.name.trim()) fe.name = ['Enter the product name'];
+    if (!f.categoryId) fe.categoryId = ['Choose a category, or add a new one'];
+    rows.forEach((r, i) => {
+      if (!r.sku.trim()) fe[`variants.${i}.sku`] = ['Required'];
+      if (!r.price.trim()) fe[`variants.${i}.price`] = ['Required'];
+      if (canOpen && r.openingQty.trim() === '') fe[`variants.${i}.openingQty`] = ['Enter 0 if none'];
+    });
+    if (canOpen && rows.some((r) => Number(r.openingQty) > 0) && !openingLocationId) fe.openingLocationId = ['Choose where the opening stock is'];
+    if (Object.keys(fe).length) { setErrors(fe); setBanner('Check the highlighted fields'); throw new Shown(); }
+  };
+
   const create = async () => {
+    checkCreate();
+    const opening = canOpen && rows.some((r) => Number(r.openingQty) > 0);
     const body = {
-      name: f.name, description: f.description, categoryId: f.categoryId || null, brandId: f.brandId || null, unitCode: f.unitCode,
+      name: f.name, description: f.description, categoryId: f.categoryId, brandId: f.brandId || null, unitCode: f.unitCode,
       type: f.type, status: f.status, hsnCode: nullable(f.hsnCode), gstRate: nullable(f.gstRate),
-      variants: rows.map((r) => variantBody(r, meta.can.seeCost, f.type === 'variable')),
+      ...(opening ? { openingLocationId } : {}),
+      variants: rows.map((r) => ({
+        ...variantBody(r, meta.can.seeCost, f.type === 'variable'),
+        ...(canOpen && Number(r.openingQty) > 0 ? { openingQty: r.openingQty.trim() } : {}),
+      })),
     };
     const { data } = await api<Product>('/products', { method: 'POST', body, headers: { 'idempotency-key': idemKey } });
     router.push(`/products/${data.id}`);
@@ -131,13 +216,16 @@ export function ProductForm({ product, meta, onSaved, onImagesChanged }: {
           continue;
         }
         const was = original.get(r.id)!;
-        const fields: ('sku' | 'barcode' | 'price' | 'mrp' | 'reorderLevel' | 'cost')[] = ['sku', 'barcode', 'price', 'mrp', 'reorderLevel'];
+        type F = 'sku' | 'barcode' | 'price' | 'mrp' | 'reorderLevel' | 'cost' | 'netWeight' | 'netWeightUnit';
+        const fields: F[] = ['sku', 'barcode', 'price', 'mrp', 'reorderLevel', 'netWeight', 'netWeightUnit'];
         if (meta.can.seeCost) fields.push('cost');
-        const changed = fields.filter((k) => r[k] !== was[k]);
+        const changed: string[] = fields.filter((k) => r[k] !== was[k]);
+        // Net weight and its unit always travel together (the API checks the pair).
+        if (changed.includes('netWeight') || changed.includes('netWeightUnit')) changed.push('netWeight', 'netWeightUnit');
         const attrsChanged = JSON.stringify(r.attributes) !== JSON.stringify(was.attributes);
         if (!changed.length && !attrsChanged) continue;
         const full = variantBody(r, meta.can.seeCost, attrsChanged) as Record<string, unknown>;
-        const body = Object.fromEntries(Object.entries(full).filter(([k]) => (changed as string[]).includes(k) || k === 'attributes'));
+        const body = Object.fromEntries(Object.entries(full).filter(([k]) => changed.includes(k) || k === 'attributes'));
         await api(`/variants/${r.id}`, { method: 'PATCH', body, headers: { 'if-match': `"${r.version}"` } });
       } catch (e) { fail(e, `variants.${i}.`); throw new Shown(); }
     }
@@ -166,11 +254,12 @@ export function ProductForm({ product, meta, onSaved, onImagesChanged }: {
 
   const catLabel = (c: Ref) => { const p = cats.find((x) => x.id === c.parentId); return p ? `${p.name} › ${c.name}` : c.name; };
   const showCost = meta.can.seeCost;
+  const unitAbbr = meta.units.find((u) => u.code === f.unitCode)?.abbr ?? '';
 
   return (
     <form onSubmit={save} noValidate>
-      {banner && <div className="ui-alert ui-alert--danger" role="alert"><div className="ui-alert-body">{banner}</div></div>}
-      <div className="g gside" style={{ display: 'grid', gap: 'var(--space-4)', gridTemplateColumns: editing ? 'minmax(0,1fr) 340px' : 'minmax(0,1fr)' }}>
+      {banner && <div className="ui-alert ui-alert--danger" role="alert" style={{ marginBottom: 'var(--space-4)' }}><div className="ui-alert-body">{banner}</div></div>}
+      <div className={`g gside gp-form-side${editing ? ' gp-form-side--with' : ''}`}>
         <div style={{ display: 'grid', gap: 'var(--space-4)', alignContent: 'start' }}>
           <fieldset className="ui-panel" disabled={readOnly} style={{ border: 0, padding: 0, margin: 0 }}>
             <div className="ui-panel-head"><span className="ui-h3">Details</span></div>
@@ -181,12 +270,13 @@ export function ProductForm({ product, meta, onSaved, onImagesChanged }: {
                 {err('name') && <span className="ui-error">{err('name')}</span>}
               </div>
               <div className="ui-field">
-                <label className="ui-label" htmlFor="p-cat">Category</label>
-                <select className="ui-select" id="p-cat" value={f.categoryId} onChange={set('categoryId')}>
-                  <option value="">None</option>
+                <label className="ui-label" htmlFor="p-cat">Category<span className="ui-req" aria-hidden="true">*</span></label>
+                <select className="ui-select" id="p-cat" value={f.categoryId} onChange={set('categoryId')} required aria-invalid={!!err('categoryId')}>
+                  <option value="" disabled>Choose a category</option>
                   {cats.map((c) => <option key={c.id} value={c.id}>{catLabel(c)}</option>)}
                 </select>
                 {err('categoryId') && <span className="ui-error">{err('categoryId')}</span>}
+                {!readOnly && <QuickAdd kind="categories" parents={cats} onAdded={(r) => { setCats((x) => [...x, r]); setF((x) => ({ ...x, categoryId: r.id })); }} />}
               </div>
               <div className="ui-field">
                 <label className="ui-label" htmlFor="p-brand">Brand</label>
@@ -194,6 +284,7 @@ export function ProductForm({ product, meta, onSaved, onImagesChanged }: {
                   <option value="">None</option>
                   {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
+                {!readOnly && <QuickAdd kind="brands" onAdded={(r) => { setBrands((x) => [...x, r]); setF((x) => ({ ...x, brandId: r.id })); }} />}
               </div>
               <div className="ui-field">
                 <label className="ui-label" htmlFor="p-hsn">HSN code</label>
@@ -229,7 +320,7 @@ export function ProductForm({ product, meta, onSaved, onImagesChanged }: {
 
           <fieldset className="ui-panel" disabled={readOnly} style={{ border: 0, padding: 0, margin: 0 }}>
             <div className="ui-panel-head">
-              <span className="ui-h3">{f.type === 'variable' ? 'Variants' : 'Price and codes'}</span>
+              <span className="ui-h3">{f.type === 'variable' ? 'Variants, price and stock' : 'Price, codes and stock'}</span>
               {!editing && (
                 <div className="ui-segmented" role="group" aria-label="Product type" style={{ marginLeft: 'auto' }}>
                   <button type="button" aria-pressed={f.type === 'simple'} onClick={() => { setF({ ...f, type: 'simple' }); setRows([rows[0] ? { ...rows[0], attributes: {} } : blankRow()]); setOptions({}); }}>One item</button>
@@ -256,22 +347,38 @@ export function ProductForm({ product, meta, onSaved, onImagesChanged }: {
               </div>
             )}
 
+            {canOpen && (
+              <div className="ui-panel-body gp-opening">
+                <div className="ui-field" style={{ maxWidth: 320 }}>
+                  <label className="ui-label" htmlFor="p-open-loc">Opening stock goes to</label>
+                  <select className="ui-select" id="p-open-loc" value={openingLocationId} onChange={(e) => setOpeningLocationId(e.target.value)} aria-invalid={!!err('openingLocationId')}>
+                    {!locations.length && <option value="">Loading…</option>}
+                    {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                  {err('openingLocationId') && <span className="ui-error">{err('openingLocationId')}</span>}
+                </div>
+                <p className="ui-help" style={{ margin: 0 }}>Opening quantity is the stock you already have on the shelf. It is posted to stock history as “Opening stock”. Enter 0 if you have none yet.</p>
+              </div>
+            )}
+
             <div className="ui-table-wrap">
               <table className="ui-table">
                 <thead><tr>
                   {f.type === 'variable' && <th scope="col">Variant</th>}
-                  <th scope="col">SKU *</th><th scope="col">Barcode</th>
+                  <th scope="col">SKU *</th><th scope="col">Barcode *</th>
                   <th scope="col" className="ui-money">Price *</th><th scope="col" className="ui-money">MRP</th>
                   {showCost && <th scope="col" className="ui-money">Cost</th>}
-                  <th scope="col" className="ui-qty">Reorder at</th>
+                  <th scope="col" className="ui-qty"><abbr title="Minimum quantity: below this the item shows as low stock" style={{ textDecoration: 'none' }}>Min qty</abbr></th>
+                  {canOpen && <th scope="col" className="ui-qty" title={unitAbbr ? `In ${unitAbbr}` : undefined}>Opening qty *</th>}
+                  <th scope="col">Net weight</th>
                   {editing && f.type === 'variable' && <th scope="col"><span className="ui-sr-only">Actions</span></th>}
                 </tr></thead>
                 <tbody>
                   {rows.map((r, i) => {
                     const e = (k: string) => err(`variants.${i}.${k}`);
-                    const cell = (k: 'sku' | 'barcode' | 'price' | 'mrp' | 'cost' | 'reorderLevel', cls = '', mode: 'text' | 'decimal' | 'numeric' = 'text') => (
+                    const cell = (k: 'sku' | 'barcode' | 'price' | 'mrp' | 'cost' | 'reorderLevel' | 'openingQty', cls = '', mode: 'text' | 'decimal' | 'numeric' = 'text', label: string = k) => (
                       <td className="ui-wrap">
-                        <input className={`ui-input ${cls}`} style={{ height: 32, minWidth: k === 'sku' ? 150 : 96 }} inputMode={mode} value={r[k]} aria-label={`${k} ${attrLabel(r.attributes)}`}
+                        <input className={`ui-input ${cls}`} style={{ height: 32, minWidth: k === 'sku' ? 140 : 76 }} inputMode={mode} value={r[k]} aria-label={`${label} ${attrLabel(r.attributes)}`}
                           aria-invalid={!!e(k)} onChange={(ev) => setRow(r.key, { [k]: ev.target.value })} disabled={r.status === 'archived'} />
                         {e(k) && <div className="ui-error">{e(k)}</div>}
                       </td>
@@ -280,19 +387,31 @@ export function ProductForm({ product, meta, onSaved, onImagesChanged }: {
                       <tr key={r.key} data-tone={r.status === 'archived' ? undefined : (Object.keys(errors).some((k) => k.startsWith(`variants.${i}.`)) ? 'danger' : undefined)}
                         style={r.status === 'archived' ? { opacity: 0.55 } : undefined}>
                         {f.type === 'variable' && <td>{attrLabel(r.attributes) || <span className="ui-muted">—</span>}{e('attributes') && <div className="ui-error">{e('attributes')}</div>}</td>}
-                        {cell('sku', 'ui-code')}
+                        {cell('sku', 'ui-code', 'text', 'SKU')}
                         <td className="ui-wrap">
                           <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
-                            <input className="ui-input ui-code" style={{ height: 32, minWidth: 150 }} value={r.barcode} aria-label={`barcode ${attrLabel(r.attributes)}`} aria-invalid={!!e('barcode')}
-                              onChange={(ev) => setRow(r.key, { barcode: ev.target.value })} disabled={r.status === 'archived'} />
-                            {!r.barcode && r.status !== 'archived' && <button className="ui-btn ui-btn--sm ui-btn--ghost" type="button" onClick={() => generateBarcode(r.key)}>Generate</button>}
+                            <input className="ui-input ui-code" style={{ height: 32, minWidth: 128 }} value={r.barcode} aria-label={`barcode ${attrLabel(r.attributes)}`} aria-invalid={!!e('barcode')}
+                              placeholder={r.id ? '' : 'Auto on save'} onChange={(ev) => setRow(r.key, { barcode: ev.target.value })} disabled={r.status === 'archived'} />
+                            {!r.barcode && r.status !== 'archived' && <button className="ui-btn ui-btn--sm ui-btn--ghost" type="button" onClick={() => generateBarcode(r.key)} title="Fill in the next code in your series now">Generate</button>}
                           </div>
                           {e('barcode') && <div className="ui-error">{e('barcode')}</div>}
                         </td>
-                        {cell('price', 'ui-input--num', 'decimal')}
-                        {cell('mrp', 'ui-input--num', 'decimal')}
-                        {showCost && cell('cost', 'ui-input--num', 'decimal')}
-                        {cell('reorderLevel', 'ui-input--num', 'decimal')}
+                        {cell('price', 'ui-input--num', 'decimal', 'Price')}
+                        {cell('mrp', 'ui-input--num', 'decimal', 'MRP')}
+                        {showCost && cell('cost', 'ui-input--num', 'decimal', 'Cost')}
+                        {cell('reorderLevel', 'ui-input--num', 'decimal', 'Minimum quantity')}
+                        {canOpen && cell('openingQty', 'ui-input--num', 'decimal', 'Opening quantity')}
+                        <td className="ui-wrap">
+                          <div className="gp-weight">
+                            <input className="ui-input ui-input--num" style={{ height: 32, width: 72 }} inputMode="decimal" value={r.netWeight} placeholder="—"
+                              aria-label={`Net weight ${attrLabel(r.attributes)}`} aria-invalid={!!e('netWeight')} onChange={(ev) => setRow(r.key, { netWeight: ev.target.value })} disabled={r.status === 'archived'} />
+                            <select className="ui-select" style={{ height: 32, width: 58, padding: '0 var(--space-1)' }} value={r.netWeightUnit} aria-label={`Net weight unit ${attrLabel(r.attributes)}`}
+                              onChange={(ev) => setRow(r.key, { netWeightUnit: ev.target.value as WeightUnit })} disabled={r.status === 'archived'}>
+                              {WEIGHT_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                          </div>
+                          {(e('netWeight') || e('netWeightUnit')) && <div className="ui-error">{e('netWeight') || e('netWeightUnit')}</div>}
+                        </td>
                         {editing && f.type === 'variable' && (
                           <td>{r.id
                             ? <button className="ui-btn ui-btn--sm ui-btn--ghost" type="button" onClick={() => toggleArchive(r)}>{r.status === 'archived' ? 'Restore' : 'Archive'}</button>
@@ -305,6 +424,12 @@ export function ProductForm({ product, meta, onSaved, onImagesChanged }: {
                 </tbody>
               </table>
             </div>
+            {!readOnly && (
+              <p className="ui-help gp-form-note">
+                Barcode: leave it blank and GroPop gives the next code in your series when you save (after AC1204 comes AC1205), or scan the maker’s barcode to use that.
+                Min qty: below this the item shows as low stock. Net weight is the weight or volume printed on the pack.
+              </p>
+            )}
             {editing && f.type === 'variable' && !readOnly && (
               <div className="ui-panel-body" style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'end' }}>
                 {Object.keys(rows[0]?.attributes ?? {}).map((k) => (

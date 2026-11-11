@@ -40,6 +40,8 @@ export interface ReportColumn { key: string; label: string; type: 'text' | 'qty'
 export interface ReportResult {
   report: string; title: string; description: string; from: string | null; to: string | null; columns: ReportColumn[];
   rows: Record<string, string | number | null>[]; truncated: boolean; rowCount: number; totals: Record<string, string | number | null>;
+  /** v2 (D115): the outlet the report covers; null = every outlet in view. */
+  outletId?: string | null; outletName?: string | null;
 }
 
 export interface Dashboard {

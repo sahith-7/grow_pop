@@ -1,3 +1,4 @@
+import { outletScope } from '../outlets/scope.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { tenantTx } from '../../db.js';
@@ -70,7 +71,7 @@ export async function purchasingRoutes(app: FastifyInstance) {
   const receive = { preHandler: requires('purchase.receive') };
   app.get('/goods-receipts', view, async (req) => {
     const q = s.docListQuery.parse(req.query);
-    const out = await tx(req, (t) => svc.listReceipts(t, { ...q, after: decodeCursor(q.cursor, page) }));
+    const out = await tx(req, async (t) => svc.listReceipts(t, { ...q, after: decodeCursor(q.cursor, page), scope: await outletScope(t, req) }));
     return { items: out.items, nextCursor: out.last ? encodeCursor(out.last) : null };
   });
   app.get('/goods-receipts/:id', view, async (req) => tx(req, (t) => svc.getReceipt(t, ctxOf(req), s.idParam.parse(req.params).id)));
@@ -84,7 +85,7 @@ export async function purchasingRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------- supplier returns
   app.get('/supplier-returns', view, async (req) => {
     const q = s.docListQuery.parse(req.query);
-    const out = await tx(req, (t) => svc.listSupplierReturns(t, { ...q, after: decodeCursor(q.cursor, page) }));
+    const out = await tx(req, async (t) => svc.listSupplierReturns(t, { ...q, after: decodeCursor(q.cursor, page), scope: await outletScope(t, req) }));
     return { items: out.items, nextCursor: out.last ? encodeCursor(out.last) : null };
   });
   app.post('/supplier-returns', manage, async (req, reply) => {

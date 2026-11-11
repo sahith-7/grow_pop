@@ -6,6 +6,9 @@ import { Suspense, useEffect, useState } from 'react';
 import { ApiError, api, errorText, fieldError, idemKey, noEnterSubmit, type Picked, type PostedDocument, type PurchaseOrder, type StockMeta } from '../../../../lib/stock-api';
 import { ItemCell, ItemPicker } from '../../stock/_components/item-picker';
 import { useSuppliers } from '../_components/use-suppliers';
+import { QtyStepper } from '../../../../lib/qty';
+import { useMe } from '../../../../lib/me';
+import { metaInView } from '../../../../lib/outlet-scope';
 
 interface Line { key: string; item: Picked; poLineId: string | null; outstanding: string | null; locationId: string; received: string; accepted: string; unitCost: string }
 
@@ -19,6 +22,7 @@ const damaged = (l: Line) => { const d = (Number(l.received) || 0) - (Number(l.a
 function ReceivePage() {
   const router = useRouter();
   const poId = useSearchParams().get('po');
+  const view = useMe().outlets;
   const { suppliers } = useSuppliers();
   const [meta, setMeta] = useState<StockMeta | null>(null);
   const [po, setPo] = useState<PurchaseOrder | null>(null);
@@ -33,7 +37,8 @@ function ReceivePage() {
   const [key, setKey] = useState(idemKey);
 
   useEffect(() => {
-    api<StockMeta>('/stock/meta').then(({ data }) => {
+    api<StockMeta>('/stock/meta').then(({ data: all }) => {
+      const data = metaInView(view, all);   // v2 (D115): received into a room at the outlet in view
       setMeta(data);
       const active = data.locations.filter((l) => l.active);
       const loc = active.find((l) => l.type === 'back_room')?.id ?? active[0]?.id ?? '';
@@ -138,12 +143,12 @@ function ReceivePage() {
                   {(err(i, 'variantId') || err(i, 'poLineId')) && <div className="ui-error">{err(i, 'variantId') ?? err(i, 'poLineId')}</div>}</td>
                 {po && <td className="ui-num">{l.outstanding ?? <span className="ui-muted">—</span>}</td>}
                 <td className="ui-num">
-                  <input className="ui-input ui-input--num" style={{ width: 80 }} inputMode="decimal" value={l.received} placeholder="0" aria-label="Arrived" aria-invalid={!!err(i, 'receivedQty')}
-                    onChange={(e) => { const v = e.target.value; set(i, { received: v, accepted: l.accepted === l.received ? v : l.accepted }); }} />
+                  <QtyStepper value={l.received} placeholder="0" label={`Arrived: ${l.item.sku}`} invalid={!!err(i, 'receivedQty')}
+                    onChange={(v) => set(i, { received: v, accepted: l.accepted === l.received ? v : l.accepted })} />
                   {err(i, 'receivedQty') && <div className="ui-error">{err(i, 'receivedQty')}</div>}
                 </td>
                 <td className="ui-num">
-                  <input className="ui-input ui-input--num" style={{ width: 80 }} inputMode="decimal" value={l.accepted} placeholder="0" aria-label="Accepted" aria-invalid={!!err(i, 'acceptedQty')} onChange={(e) => set(i, { accepted: e.target.value })} />
+                  <QtyStepper value={l.accepted} placeholder="0" label={`Accepted: ${l.item.sku}`} max={Number(l.received) || 0} invalid={!!err(i, 'acceptedQty')} onChange={(v) => set(i, { accepted: v })} />
                   {err(i, 'acceptedQty') && <div className="ui-error">{err(i, 'acceptedQty')}</div>}
                 </td>
                 <td className="ui-num">{damaged(l) || <span className="ui-muted">0</span>}</td>

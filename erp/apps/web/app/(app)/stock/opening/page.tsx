@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { api, errorText, idemKey, type StockMeta } from '../../../../lib/stock-api';
+import { useMe } from '../../../../lib/me';
+import { metaInView } from '../../../../lib/outlet-scope';
 
 interface Check {
   totalRows: number; validRows: number; errorCount: number;
@@ -12,6 +14,7 @@ interface Check {
 
 /** Opening stock from a CSV: upload, check every row, then post it all or nothing. */
 export default function OpeningStockPage() {
+  const view = useMe().outlets;
   const [meta, setMeta] = useState<StockMeta | null>(null);
   const [locationId, setLocationId] = useState('');
   const [file, setFile] = useState<{ id: string; name: string } | null>(null);
@@ -21,7 +24,8 @@ export default function OpeningStockPage() {
   const [key, setKey] = useState(idemKey);
 
   useEffect(() => {
-    api<StockMeta>('/stock/meta').then(({ data }) => {
+    api<StockMeta>('/stock/meta').then(({ data: all }) => {
+      const data = metaInView(view, all);   // v2 (D115): rooms at the outlet in view
       setMeta(data);
       const active = data.locations.filter((l) => l.active);
       setLocationId(active.find((l) => l.type === 'shop_floor')?.id ?? active[0]?.id ?? '');

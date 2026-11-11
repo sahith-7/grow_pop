@@ -43,7 +43,7 @@ describe('B5 POS sale (regular GST seller, prices include GST)', () => {
     expect(q.body.lines[0]).toMatchObject({ taxableValue: '1000.00', tax: '180.00', gstRate: '18', available: '10' });
 
     const res = await api(t.cookie, 'POST', '/v1/pos/sales', {
-      lines: [{ variantId: shirt, qty: '1' }, { variantId: rice, qty: '2' }], expectedTotal: '1390.00',
+      walkIn: true, lines: [{ variantId: shirt, qty: '1' }, { variantId: rice, qty: '2' }], expectedTotal: '1390.00',
       payments: [{ method: 'upi', amount: '390', reference: 'UPI-77' }, { method: 'cash', amount: '1500' }],
     }, key());
     expect(res.status, res.text).toBe(201);
@@ -65,7 +65,7 @@ describe('B5 POS sale (regular GST seller, prices include GST)', () => {
   });
 
   it('a retried request returns the same sale; the same key with another body is refused', async () => {
-    const body = { lines: [{ variantId: rice, qty: '1' }], expectedTotal: '105.00', payments: [{ method: 'cash', amount: '105' }] };
+    const body = { walkIn: true, lines: [{ variantId: rice, qty: '1' }], expectedTotal: '105.00', payments: [{ method: 'cash', amount: '105' }] };
     const k = key();
     const a = await api(t.cookie, 'POST', '/v1/pos/sales', body, k);
     const b = await api(t.cookie, 'POST', '/v1/pos/sales', body, k);
@@ -78,9 +78,9 @@ describe('B5 POS sale (regular GST seller, prices include GST)', () => {
 
   it('refuses when the total changed since the cashier saw it, or payments do not cover it', async () => {
     const lines = [{ variantId: rice, qty: '1' }];
-    expect((await api(t.cookie, 'POST', '/v1/pos/sales', { lines, expectedTotal: '100.00', payments: [{ method: 'cash', amount: '105' }] }, key())).body.code).toBe('PRICE_CHANGED');
-    expect((await api(t.cookie, 'POST', '/v1/pos/sales', { lines, expectedTotal: '105.00', payments: [{ method: 'card', amount: '110' }] }, key())).body.code).toBe('PAYMENT_MISMATCH');
-    const short = await api(t.cookie, 'POST', '/v1/pos/sales', { lines, expectedTotal: '105.00', payments: [{ method: 'cash', amount: '100' }] }, key());
+    expect((await api(t.cookie, 'POST', '/v1/pos/sales', { walkIn: true, lines, expectedTotal: '100.00', payments: [{ method: 'cash', amount: '105' }] }, key())).body.code).toBe('PRICE_CHANGED');
+    expect((await api(t.cookie, 'POST', '/v1/pos/sales', { walkIn: true, lines, expectedTotal: '105.00', payments: [{ method: 'card', amount: '110' }] }, key())).body.code).toBe('PAYMENT_MISMATCH');
+    const short = await api(t.cookie, 'POST', '/v1/pos/sales', { walkIn: true, lines, expectedTotal: '105.00', payments: [{ method: 'cash', amount: '100' }] }, key());
     expect([short.body.code, short.body.message]).toEqual(['PAYMENT_MISMATCH', '₹5.00 still to pay']);
   });
 

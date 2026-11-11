@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { tenantTx, type Tx } from '../../db.js';
 import { gstinProblem, STATES } from '../../lib/gst.js';
+import { national, phoneProblem } from '../../lib/phone.js';
 import { appError, audit, authOf, requires, requiresAny } from '../../lib/phase1.js';
 
 // Customers for POS bills (B5). Web-order customers arrive from WooCommerce (B4) and are found by the same search.
@@ -11,7 +12,7 @@ const tx = <T>(req: FastifyRequest, fn: (t: Tx) => Promise<T>) => tenantTx(authO
 
 const fields = {
   name: z.string().trim().min(1, 'Enter a name').max(200),
-  phone: z.string().trim().regex(/^\+?[0-9]{8,15}$/, 'Digits only, like 9876543210').nullable(),
+  phone: z.string().trim().regex(/^\+?[0-9]{8,15}$/, 'Digits only, like 9848012345').nullable(),
   email: z.string().trim().email('Enter an email address').max(254).nullable(),
   gstin: z.string().trim().toUpperCase().nullable(),
   stateCode: z.string().refine((v) => !!STATES[v], 'Pick a state').nullable(),
@@ -41,8 +42,20 @@ function check(input: { gstin?: string | null; stateCode?: string | null }) {
   return { gstin: gstin ?? null, stateCode: input.stateCode ?? null };
 }
 
+/** A made-up number, or the shop's own number typed to get past the "customer's mobile" rule (v2, D104). */
+export async function checkPhone(t: Tx, phone: string | null | undefined) {
+  if (!phone) return;
+  const problem = phoneProblem(phone);
+  if (problem) throw appError(400, 'VALIDATION_ERROR', 'Check the highlighted fields', { phone: [problem] });
+  const { rows } = await t.query(`SELECT phone FROM store_settings WHERE phone IS NOT NULL UNION ALL SELECT phone FROM outlets WHERE phone IS NOT NULL`);
+  if (rows.some((r) => r.phone && national(r.phone) === national(phone))) {
+    throw appError(400, 'VALIDATION_ERROR', 'Check the highlighted fields', { phone: ['This is the shop’s own number. Ask for the customer’s number, or bill as Walk-in.'] });
+  }
+}
+
 async function phoneTaken(t: Tx, phone: string | null | undefined, exceptId?: string) {
   if (!phone) return;
+  await checkPhone(t, phone);
   const { rows: [c] } = await t.query('SELECT id, name FROM customers WHERE phone = $1 AND archived_at IS NULL AND id IS DISTINCT FROM $2 LIMIT 1', [phone, exceptId ?? null]);
   if (c) throw appError(409, 'CUSTOMER_EXISTS', `${c.name || 'A customer'} already has this phone number. Search for them instead.`, { phone: ['Already used'] });
 }
@@ -81,7 +94,7 @@ export async function customerRoutes(app: FastifyInstance) {
       const { rows: [cur] } = await t.query('SELECT * FROM customers WHERE id = $1 FOR UPDATE', [id]);
       if (!cur || cur.archived_at) throw appError(404, 'NOT_FOUND', 'Customer not found');
       const { gstin, stateCode } = check({ gstin: input.gstin !== undefined ? input.gstin : cur.gstin, stateCode: input.stateCode !== undefined ? input.stateCode : cur.state_code });
-      if (input.phone !== undefined) await phoneTaken(t, input.phone, id);
+      if (input.phone !== undefined && (input.phone || null) !== cur.phone) await phoneTaken(t, input.phone, id);
       const { rows: [c] } = await t.query(
         `UPDATE customers SET name = $2, phone = $3, email = $4, gstin = $5, state_code = $6, address = $7, updated_at = now() WHERE id = $1 RETURNING *`,
         [id, input.name ?? cur.name, input.phone !== undefined ? input.phone || null : cur.phone, input.email !== undefined ? input.email || null : cur.email,

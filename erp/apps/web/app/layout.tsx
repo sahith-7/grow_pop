@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import '@fontsource-variable/plus-jakarta-sans';
 import './globals.css';
 import '../src/styles/tokens.css';
 import '../src/styles/components.css';
@@ -8,7 +9,7 @@ export const metadata: Metadata = { title: BRAND.name, robots: { index: false },
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en-IN">
       <body>{children}</body>
     </html>
   );

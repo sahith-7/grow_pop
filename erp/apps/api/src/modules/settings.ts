@@ -7,7 +7,9 @@ import { requires } from '../lib/session.js';
 // Store profile: name, legal details and address (printed on GST invoices from B5), timezone, locale, currency.
 
 const GSTIN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-const ZONES = new Set([...Intl.supportedValuesOf('timeZone'), 'Asia/Kolkata', 'UTC']);
+// v2 (D93): GroPop serves Indian stores only (GST), so every store runs on India Standard Time. The field stays in the API
+// so existing clients keep working, but only Asia/Kolkata is accepted (Asia/Calcutta, its old name, is stored as Asia/Kolkata).
+const ZONES = new Set(['Asia/Kolkata', 'Asia/Calcutta']);
 
 /** '' clears a field (null); undefined leaves it as it is. */
 const text = (max: number) => z.string().trim().max(max).transform((s) => s || null).nullable().optional();
@@ -21,7 +23,7 @@ const patch = z.object({
   email: text(200).refine((s) => !s || z.string().email().safeParse(s).success, 'Enter a valid e-mail'),
   address: text(300), city: text(100), state: text(100),
   postalCode: text(10).refine((s) => !s || /^[0-9]{6}$/.test(s), 'Enter a 6-digit PIN code'),
-  timezone: z.string().refine((s) => ZONES.has(s), 'Unknown timezone').optional(),
+  timezone: z.string().refine((s) => ZONES.has(s), 'GroPop runs on India Standard Time (Asia/Kolkata)').transform(() => 'Asia/Kolkata').optional(),
   locale: z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/, 'e.g. en-IN').optional(),
   currency: z.string().regex(/^[A-Z]{3}$/, 'e.g. INR').optional(),
 }).strict();

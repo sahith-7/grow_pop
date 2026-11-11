@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { papi, perr } from '@/lib/platform-api';
+import { fmtDateTime } from '@/lib/datetime';
 
 interface Row { id: number; adminEmail: string | null; action: string; tenantId: string | null; detail: Record<string, unknown>; ip: string | null; at: string }
 
@@ -19,7 +20,7 @@ export default function ConsoleLog() {
         <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">What</th><th scope="col">Store</th><th scope="col">Details</th><th scope="col">Address</th></tr></thead>
         <tbody>{(items ?? []).map((r) => (
           <tr key={r.id}>
-            <td>{new Date(r.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+            <td>{fmtDateTime(r.at)}</td>
             <td>{r.adminEmail}</td><td>{r.action.replace('platform.', '').replace(/_/g, ' ')}</td>
             <td>{r.tenantId ? <Link href={`/platform/stores/${r.tenantId}`}>open</Link> : ''}</td>
             <td className="ui-code" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{Object.keys(r.detail).length ? JSON.stringify(r.detail) : ''}</td>

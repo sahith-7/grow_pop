@@ -4,9 +4,11 @@
 //
 // Dates are the store's own calendar days (tenants.timezone). Columns marked `cost` appear only with cost.view.
 
+import { locIn, seriesIn, type Scope } from '../outlets/scope.js';
+
 export type ColType = 'text' | 'qty' | 'money' | 'int';
 export interface Col { key: string; label: string; type: ColType; cost?: boolean; total?: boolean }
-export interface Ctx { from: string; to: string; tz: string; locationId: string | null }
+export interface Ctx { from: string; to: string; tz: string; locationId: string | null; /** v2 (D115): the outlet in view */ scope: Scope }
 export type Param = (v: unknown) => string;
 
 export interface ReportDef {
@@ -26,7 +28,7 @@ export interface ReportDef {
 const within = (col: string, c: Ctx, p: Param) =>
   `${col} >= (${p(c.from)}::date::timestamp AT TIME ZONE ${p(c.tz)}) AND ${col} < ((${p(c.to)}::date + 1)::timestamp AT TIME ZONE ${p(c.tz)})`;
 const localTime = (col: string, c: Ctx, p: Param, fmt = 'YYYY-MM-DD HH24:MI') => `to_char(${col} AT TIME ZONE ${p(c.tz)}, '${fmt}')`;
-const atLocation = (col: string, c: Ctx, p: Param) => `(${p(c.locationId)}::uuid IS NULL OR ${col} = ${p(c.locationId)}::uuid)`;
+const atLocation = (col: string, c: Ctx, p: Param) => `(${p(c.locationId)}::uuid IS NULL OR ${col} = ${p(c.locationId)}::uuid) AND ${locIn(c.scope, col, p)}`;
 const LIVE = "v.status = 'active' AND p.status <> 'archived'";
 
 export const REPORTS: Record<string, ReportDef> = {
@@ -126,7 +128,7 @@ export const REPORTS: Record<string, ReportDef> = {
 
   purchasing: {
     title: 'Purchasing',
-    description: 'Purchase orders raised in the period: ordered, received and accepted quantities, and their value at the PO cost.',
+    description: 'Purchase orders raised in the period: ordered, received and accepted quantities, and their value at the PO cost. Purchase orders are for the whole store, so this report shows every outlet.',
     dated: true, location: false,
     columns: [
       { key: 'po', label: 'PO', type: 'text' }, { key: 'date', label: 'Raised', type: 'text' }, { key: 'supplier', label: 'Supplier', type: 'text' },
@@ -161,11 +163,11 @@ export const REPORTS: Record<string, ReportDef> = {
       WITH docs AS (
         SELECT i.issued_at AS at, o.channel, 1 AS inv, 0 AS cn, i.total AS invoiced, 0 AS credited, i.taxable_total AS taxable,
                i.cgst + i.sgst + i.igst + i.cess AS tax
-          FROM invoices i JOIN sales_orders o ON o.id = i.order_id WHERE ${within('i.issued_at', c, p)}
+          FROM invoices i JOIN sales_orders o ON o.id = i.order_id WHERE ${within('i.issued_at', c, p)} AND ${seriesIn(c.scope, 'i.series_id', p)}
         UNION ALL
         SELECT cn.issued_at, o.channel, 0, 1, 0, cn.total, -cn.taxable_total, -(cn.cgst + cn.sgst + cn.igst + cn.cess)
           FROM credit_notes cn JOIN invoices i ON i.id = cn.invoice_id JOIN sales_orders o ON o.id = i.order_id
-         WHERE ${within('cn.issued_at', c, p)})
+         WHERE ${within('cn.issued_at', c, p)} AND ${seriesIn(c.scope, 'cn.series_id', p)})
       SELECT to_char((at AT TIME ZONE ${p(c.tz)})::date, 'YYYY-MM-DD') AS day,
              CASE channel WHEN 'pos' THEN 'Counter' ELSE 'Website' END AS channel,
              sum(inv)::int AS invoices, sum(cn)::int AS credit_notes, sum(invoiced) AS invoiced, sum(credited) AS credited,
@@ -176,7 +178,7 @@ export const REPORTS: Record<string, ReportDef> = {
 
   'sync-health': {
     title: 'Sync health',
-    description: 'WooCommerce jobs that failed or are retrying, and webhooks that could not be processed.',
+    description: 'WooCommerce jobs that failed or are retrying, and webhooks that could not be processed. For the whole store.',
     extra: 'sync.manage', dated: true, location: false,
     columns: [
       { key: 'at', label: 'When', type: 'text' }, { key: 'source', label: 'Source', type: 'text' }, { key: 'what', label: 'What', type: 'text' },

@@ -133,8 +133,8 @@ export const disconnect = (tenantId: string, userId: string) =>
 // (a staging copy of the ERP) or of another store connected to the same shop. It identifies; it doesn't authorise.
 const hookTag = (tenantId: string) => createHash('sha256').update(`${wooEnv.WOO_WEBHOOK_BASE_URL ?? ''}|${tenantId}`).digest('hex').slice(0, 8);
 export const hookName = (topic: string, tenantId: string, app: string = wooEnv.APP_NAME) => `${app} · ${topic} · ${hookTag(tenantId)}`;
-// Webhooks made before the rename to TRIDENT carry the old default name; cleanup still recognises them.
-const LEGACY_APP_NAMES = ['Tarazu ERP'];
+// Webhooks made under an earlier product name carry that default name; cleanup still recognises them.
+const LEGACY_APP_NAMES = ['Tarazu ERP', 'TRIDENT ERP'];
 
 export async function removeOurWebhooks(client: WooClient, known: Record<string, number>, tenantId: string) {
   const ids = new Set(Object.values(known).filter(Boolean));

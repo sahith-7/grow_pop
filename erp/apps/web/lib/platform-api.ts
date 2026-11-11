@@ -29,5 +29,7 @@ export interface StoreDetail {
   payments: { receiptNo: string; amountPaise: number; method: string; reference: string; paidOn: string; planId: string; months: number; periodTo: string; recordedBy: string; createdAt: string }[];
   events: { from: string | null; to: string; actor: string; reason: string | null; at: string }[];
   supportGrant: { expiresAt: string; reason: string | null } | null;
+  /** v2, D101: extra outlets switched on for this store, and its outlets (names only). */
+  outlets: { extraOutlets: number; outlets: { name: string; main: boolean; active: boolean; createdAt: string }[] };
 }
 export interface PlanRow { id: string; name: string; maxUsers: number; online: boolean; priceMonthPaise: number | null; priceYearPaise: number | null }

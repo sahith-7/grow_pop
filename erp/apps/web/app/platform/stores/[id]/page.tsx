@@ -4,16 +4,17 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { papi, perr, ApiError, type PlanRow, type StoreDetail } from '@/lib/platform-api';
+import { fmtDate, fmtDateTime, todayIST } from '@/lib/datetime';
 
 // One store in the console (B7): its subscription, a manual payment, state changes, and the support view while the
 // owner allows it. Nothing here reads the store's business records.
 
 const LABEL: Record<string, string> = { trial: 'Trial', active: 'Active', past_due: 'Payment due', suspended: 'Read-only', closed: 'Closed' };
 const TONE: Record<string, string> = { trial: 'info', active: 'success', past_due: 'warning', suspended: 'danger', closed: '' };
-const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
+const day = (iso: string | null) => fmtDate(iso);
+const when = (iso: string | null) => fmtDateTime(iso);
 const inr = (paise: number | null) => (paise === null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(paise / 100));
-const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+const today = () => todayIST();
 
 function Err({ text }: { text: string }) {
   return text ? <div className="ui-alert ui-alert--danger" role="alert"><div className="ui-alert-body">{text}</div></div> : null;
@@ -125,6 +126,37 @@ function Actions({ store, plans, onDone }: { store: StoreDetail; plans: PlanRow[
   );
 }
 
+/** Extra outlets (v2, D101): one is included; switch more on after the owner has paid for them. */
+function Outlets({ store, onDone }: { store: StoreDetail; onDone: () => void }) {
+  const o = store.outlets;
+  const open = o.outlets.filter((x) => x.active).length;
+  const [extra, setExtra] = useState(String(o.extraOutlets));
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true); setError('');
+    try { await papi(`/tenants/${store.id}/outlets`, { method: 'POST', body: { extraOutlets: Number(extra), reason } }); setReason(''); onDone(); }
+    catch (e) { setError(perr(e)); } finally { setBusy(false); }
+  };
+  return (
+    <section className="ui-panel">
+      <div className="ui-panel-head"><h2 className="ui-h3" style={{ margin: 0 }}>Outlets</h2></div>
+      <div className="ui-panel-body" style={{ display: 'grid', gap: 'var(--space-3)' }}>
+        <p style={{ margin: 0 }}>{open} open of {1 + o.extraOutlets} allowed (1 included + {o.extraOutlets} extra). {o.outlets.map((x) => `${x.name}${x.main ? ' (main)' : ''}${x.active ? '' : ' (closed)'}`).join(' · ')}</p>
+        <Err text={error} />
+        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <label className="ui-field"><span className="ui-label">Extra outlets paid for</span>
+            <input className="ui-input ui-input--num" type="number" min={0} max={50} style={{ width: 120 }} value={extra} onChange={(e) => setExtra(e.target.value)} /></label>
+          <label className="ui-field" style={{ flex: 1, minWidth: 220 }}><span className="ui-label">Reason (kept in the log)</span>
+            <input className="ui-input" value={reason} maxLength={300} placeholder="e.g. paid for 1 extra outlet, receipt R-000012" onChange={(e) => setReason(e.target.value)} /></label>
+          <button className="ui-btn ui-btn--primary" type="button" disabled={busy || reason.trim().length < 3 || Number(extra) === o.extraOutlets || !/^\d{1,2}$/.test(extra)} onClick={submit}>Save</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SupportView({ store }: { store: StoreDetail }) {
   const [v, setV] = useState<any>(null);
   const [error, setError] = useState('');
@@ -177,6 +209,7 @@ export default function StorePage() {
       <div style={{ display: 'grid', gap: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
         {store.state !== 'closed' && <PaymentForm store={store} plans={plans} gstPercent={gstPercent} onDone={load} />}
         <Actions store={store} plans={plans} onDone={load} />
+        <Outlets store={store} onDone={load} />
         <SupportView store={store} />
         <section className="ui-panel">
           <div className="ui-panel-head"><h2 className="ui-h3" style={{ margin: 0 }}>Payments</h2></div>

@@ -41,7 +41,7 @@ Start a timer. Write down each step's time.
 3. **Restore** (from the staging server, Session Manager; copy the dump there with `aws s3 cp` or Session Manager file
    transfer):
    ```sh
-   docker run --rm -i -v /opt/erp/certs:/certs:ro -v "$PWD:/in:ro" postgres:16 \
+   sudo docker run --rm -i -v /opt/erp/certs:/certs:ro -v "$PWD:/in:ro" postgres:16 \
      pg_restore --no-owner --exit-on-error -d "postgres://erp_owner:<pw>@<staging endpoint>:5432/erp_drill?sslmode=verify-full&sslrootcert=/certs/rds-ca.pem" /in/erp-YYYY-MM-DD.dump
    ```
 4. **Migrations change nothing**: point a one-off migrate at `erp_drill` (as in console-and-billing.md §1, with

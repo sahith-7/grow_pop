@@ -1,6 +1,6 @@
 # Checking that B6 works
 
-> **TRIDENT:** these click-throughs were written per build stage. TRIDENT already contains every stage, so skip the install, copy and commit steps (they point to INSTALL files that no longer exist), then work through the rest. Use the store you created in INSTALL-TRIDENT section 4.
+> **GroPop:** these click-throughs were written per build stage. GroPop already contains every stage, so skip the install, copy and commit steps (they point to INSTALL files that no longer exist), then work through the rest. Use the store you created in INSTALL-GROPOP section 4.
 
 Work through the steps in order. Each step says what you should see. The first time something looks different, stop and send me what the step's **If not** line asks for. Don't carry on past it.
 

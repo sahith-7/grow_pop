@@ -32,6 +32,7 @@ function ReceiptPage() {
         </div>
         <div className="ui-actions">
           <Link className="ui-btn" href={`/stock/movements?sourceId=${r.id}`}>Stock movements</Link>
+          <Link className="ui-btn" href={`/products/labels?receipt=${r.id}`}>Print labels</Link>
           {anyDamaged && <Link className="ui-btn" href={`/purchasing/returns/new?receipt=${r.id}`}>Return damaged to supplier</Link>}
         </div>
       </div>

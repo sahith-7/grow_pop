@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { tenantTx } from '../../db.js';
 import { csvLine } from '../../lib/csv.js';
 import { fmtMoney, fmtQty } from '../../lib/decimal.js';
-import { audit, authOf, can, requires } from '../../lib/phase1.js';
+import { appError, audit, authOf, can, requires } from '../../lib/phase1.js';
 import { ATTRIBUTE_KEYS } from '../catalog/schemas.js';
 import { exportRows } from '../catalog/service.js';
 import { COLUMNS, COLUMN_KEYS, type ColumnKey } from './columns.js';
@@ -12,10 +12,21 @@ import * as svc from './service.js';
 const tx = <T>(req: FastifyRequest, fn: Parameters<typeof tenantTx<T>>[1]) => tenantTx(authOf(req).tenantId, fn);
 const idParam = z.object({ id: z.string().uuid() });
 
+// Columns the export can add that the import does not read (D100). A file with them is for reading, not re-importing.
+const EXTRA_KEYS = ['stock_on_hand', 'net_weight'] as const;
+const exportQuery = z.object({
+  status: z.enum(['active', 'draft']).optional(),
+  categoryId: z.string().uuid().optional(),
+  brandId: z.string().uuid().optional(),
+  q: z.string().trim().max(100).optional(),
+  productIds: z.string().max(19_000).optional(),
+  columns: z.string().max(1000).optional(),
+}).strict();
+
 const startBody = z.object({
   kind: z.literal('products').default('products'),
   fileId: z.string().uuid(),
-  mapping: z.record(z.enum(COLUMN_KEYS as [ColumnKey, ...ColumnKey[]]), z.string().max(200)).default({}),
+  mapping: z.partialRecord(z.enum(COLUMN_KEYS as [ColumnKey, ...ColumnKey[]]), z.string().max(200)).default({}),
 }).strict();
 
 const csv = (name: string) => ({
@@ -66,16 +77,31 @@ export async function importRoutes(app: FastifyInstance) {
   });
 
   // CAT-11. Synchronous: a 5,000-variant catalog is well under a second. Audited with the row count.
+  // The export dialog (v2, D100) chooses which products and which columns. With no options it is the full,
+  // import-ready file it always was. product_name and sku always come first so a file can be matched back.
   app.get('/exports/products.csv', { preHandler: requires('report.export'), config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async (req, reply) => {
+    const q = exportQuery.parse(req.query);
     const showCost = can(req, 'cost.view');
-    const keys = COLUMN_KEYS.filter((k) => k !== 'cost' || showCost);
+    const all = [...COLUMN_KEYS, ...EXTRA_KEYS].filter((k) => k !== 'cost' || showCost) as string[];
+    const chosen = q.columns ? q.columns.split(',').map((c) => c.trim()).filter(Boolean) : null;
+    const unknown = chosen?.filter((c) => !all.includes(c)) ?? [];
+    if (unknown.length) throw appError(400, 'VALIDATION_ERROR', 'Check the highlighted fields', { columns: [`Unknown column: ${unknown.join(', ')}`] });
+    const keys: string[] = chosen
+      ? ['product_name', 'sku', ...all.filter((k) => k !== 'product_name' && k !== 'sku' && chosen.includes(k))]
+      : COLUMN_KEYS.filter((k) => k !== 'cost' || showCost);
+    const productIds = q.productIds ? q.productIds.split(',').filter(Boolean) : undefined;
+    if (productIds && (productIds.length > 500 || productIds.some((id) => !z.string().uuid().safeParse(id).success))) {
+      throw appError(400, 'VALIDATION_ERROR', 'Check the highlighted fields', { productIds: ['Up to 500 product ids'] });
+    }
     const body = await tx(req, async (t) => {
-      const rows = await exportRows(t);
-      await audit(t, { actorId: authOf(req).userId, action: 'export.products', entityType: 'export', summary: { rows: rows.length, cost: showCost } });
+      const rows = await exportRows(t, { status: q.status, categoryId: q.categoryId, brandId: q.brandId, q: q.q, productIds });
+      await audit(t, { actorId: authOf(req).userId, action: 'export.products', entityType: 'export',
+        summary: { rows: rows.length, cost: keys.includes('cost'), columns: chosen ? keys.length : 'all', filtered: !!(q.status || q.categoryId || q.brandId || q.q || productIds) } });
       return BOM + csvLine(keys) + rows.map((r) => {
         const v: Record<string, unknown> = {
           ...r, price: fmtMoney(r.price), mrp: fmtMoney(r.mrp), cost: fmtMoney(r.cost), reorder_level: fmtQty(r.reorder_level),
           gst_rate: r.gst_rate === null ? '' : String(Number(r.gst_rate)),
+          stock_on_hand: fmtQty(r.stock_on_hand), net_weight: r.net_weight === null ? '' : `${fmtQty(r.net_weight)} ${r.net_weight_unit}`,
         };
         for (const a of ATTRIBUTE_KEYS) v[a] = r.attributes[a] ?? '';
         return csvLine(keys.map((k) => v[k]));
@@ -83,4 +109,5 @@ export async function importRoutes(app: FastifyInstance) {
     });
     return reply.headers(csv(`products-${new Date().toISOString().slice(0, 10)}.csv`)).send(body);
   });
+
 }

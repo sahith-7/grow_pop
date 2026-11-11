@@ -25,11 +25,12 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<{ dat
 export const errorText = (e: unknown) => (e instanceof ApiError ? e.message : 'Something went wrong. Check your connection and try again.');
 
 // ---- shapes returned by the API (subset the screens use)
-export interface Ref { id: string; name: string; parentId: string | null; archivedAt: string | null }
+export interface Ref { id: string; name: string; parentId: string | null; archivedAt: string | null; /** categories only (v2, D113) */ noReturns?: boolean }
 export interface Unit { code: string; name: string; abbr: string; allowFraction: boolean }
 export interface Variant {
   id: string; sku: string; barcode: string | null; attributes: Record<string, string>; price: string; mrp: string | null;
   cost?: string | null; weightG: number | null; reorderLevel: string | null; status: 'active' | 'archived'; version: number;
+  netWeight: string | null; netWeightUnit: 'g' | 'kg' | 'ml' | 'l' | null;
 }
 export interface Image { id: string; url: string; thumbnailUrl: string; isPrimary: boolean; altText: string; sortOrder: number }
 export interface Product {
@@ -40,6 +41,7 @@ export interface Product {
 export interface ProductSummary {
   id: string; name: string; status: string; category: string | null; variantCount: number; skus: string[];
   priceRange: { min: string; max: string } | null; thumbnailUrl: string | null; publishState: string;
+  stock: { free: string; low: boolean };
 }
 export const ATTRIBUTE_KEYS = ['size', 'colour', 'model', 'material'] as const;
 export const GST_RATES = ['0', '0.1', '0.25', '1', '1.5', '3', '5', '12', '18', '28', '40'] as const;

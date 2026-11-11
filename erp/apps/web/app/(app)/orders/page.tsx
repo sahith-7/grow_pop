@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { money } from '../../../lib/format';
+import { HitRow, searchHits, Suggestions, useSuggest, type SearchHit } from '../../../lib/suggest';
 import { dateTime } from '../../../lib/stock-api';
 import { api, errorText, ORDER_STATUS, type OrderSummary } from '../../../lib/woo-api';
 
@@ -25,6 +26,8 @@ function OrdersPage() {
   const params = useSearchParams();
   const status = params.get('status') ?? '';
   const [q, setQ] = useState(params.get('q') ?? '');
+  const sg = useSuggest<SearchHit>({ q, load: (t) => searchHits(t, ['order']) });
+  const openHit = (h: SearchHit) => router.push(h.href);
   const [items, setItems] = useState<OrderSummary[] | null>(null);
   const [counts, setCounts] = useState<{ attention: number; ready: number } | null>(null);
   const [cursors, setCursors] = useState<string[]>([]);
@@ -69,7 +72,11 @@ function OrdersPage() {
 
       <div className="ui-panel">
         <form className="ui-toolbar" role="search" onSubmit={(e) => { e.preventDefault(); setParam('q', q.trim()); }}>
-          <input className="ui-input ui-search" placeholder="Order number, customer name or phone" aria-label="Search orders" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="gp-suggest">
+            <input className="ui-input ui-search" placeholder="Order number, customer name or phone" aria-label="Search orders" value={q} onChange={(e) => setQ(e.target.value)}
+              {...sg.inputProps} onKeyDown={(e) => sg.onKeyDown(e, openHit)} />
+            <Suggestions s={sg} onPick={openHit} render={(h) => <HitRow hit={h} />} label="Matching orders" />
+          </div>
         </form>
         {items === null ? <div className="ui-panel-body"><div className="ui-skeleton" style={{ height: 160 }} /></div>
           : items.length === 0 ? (

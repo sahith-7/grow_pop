@@ -15,7 +15,7 @@ type B2Permission = Extract<Permission, 'product.read' | 'product.write' | 'cost
   | 'stocktake.count' | 'stocktake.approve' | 'purchase.manage' | 'purchase.receive' | 'settings.manage'
   | 'order.read' | 'order.fulfil' | 'sync.manage' | 'woo.connect'
   | 'settings.read' | 'pos.sell' | 'pos.discount' | 'pos.price_override' | 'return.manage' | 'invoice.read' | 'invoice.void'
-  | 'report.view' | 'account.manage'>;
+  | 'report.view' | 'account.manage' | 'contacts.view' | 'price.bulk' | 'users.manage' | 'pos.discount_approve' | 'cash.manage'>;
 
 /** Route guard: valid session plus the permission, checked by Phase 1. */
 export const requires = (perm: B2Permission) => phase1Requires(perm);

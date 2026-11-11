@@ -5,8 +5,9 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { money } from '../../../../lib/format';
 import { dateTime, idemKey } from '../../../../lib/stock-api';
-import { api, errorText, PAY_METHOD, type TaxDocument } from '../../../../lib/sales-api';
-import { PRINT_CSS, TaxDocumentView, type Paper } from '../_components/tax-document';
+import { ApiError, api, errorText, PAY_METHOD, type TaxDocument } from '../../../../lib/sales-api';
+import type { Till } from '../../../../lib/cash-api';
+import { PaperPicker, PRINT_CSS, TaxDocumentView, type Paper } from '../_components/tax-document';
 
 export default function InvoicePage() {
   const { id } = useParams<{ id: string }>();
@@ -15,7 +16,8 @@ export default function InvoicePage() {
   const [paper, setPaper] = useState<Paper>('a4');
   const [voiding, setVoiding] = useState(false);
 
-  const load = () => api<TaxDocument>(`/invoices/${id}`).then((r) => setDoc(r.data)).catch((e) => setError(errorText(e)));
+  const [chosen, setChosen] = useState(false);
+  const load = () => api<TaxDocument>(`/invoices/${id}`).then((r) => { setDoc(r.data); if (!chosen && r.data.billFormat) setPaper(r.data.billFormat); }).catch((e) => setError(errorText(e)));
   useEffect(() => { load(); }, [id]);
 
   const print = (p: Paper) => { setPaper(p); setTimeout(() => window.print(), 50); };
@@ -42,8 +44,7 @@ export default function InvoicePage() {
           </div>
         </div>
         <div className="ui-actions">
-          <button className="ui-btn" type="button" onClick={() => print('a4')}>Print A4</button>
-          <button className="ui-btn" type="button" onClick={() => print('receipt')}>Print receipt</button>
+          <button className="ui-btn" type="button" onClick={() => print(paper)}>Print</button>
           {returnable && doc.can?.return && <Link className="ui-btn ui-btn--primary" href={`/returns/new?invoice=${doc.id}`}>Return items</Link>}
           {returnable && doc.can?.void && <button className="ui-btn ui-btn--danger" type="button" onClick={() => setVoiding(true)}>Void</button>}
         </div>
@@ -77,10 +78,7 @@ export default function InvoicePage() {
         </div>
       )}
 
-      <div className="ui-segmented" role="group" aria-label="Paper">
-        <button type="button" aria-pressed={paper === 'a4'} onClick={() => setPaper('a4')}>A4</button>
-        <button type="button" aria-pressed={paper === 'receipt'} onClick={() => setPaper('receipt')}>Receipt</button>
-      </div>
+      <PaperPicker paper={paper} onChange={(p) => { setPaper(p); setChosen(true); }} />
       <div style={{ overflowX: 'auto' }}><TaxDocumentView doc={doc} paper={paper} /></div>
 
       {voiding && <VoidDialog doc={doc} onClose={() => setVoiding(false)} onDone={() => { setVoiding(false); load(); }} />}
@@ -96,11 +94,16 @@ function VoidDialog({ doc, onClose, onDone }: { doc: TaxDocument; onClose: () =>
   const [error, setError] = useState('');
   const [key] = useState(idemKey);
   const left = doc.lines.filter((l) => Number(l.returnableQty) > 0);
+  // Cash given back leaves a till's drawer (v2, D110). With one register open the server picks it; with several, say which.
+  const [openTills, setOpenTills] = useState<Till[]>([]);
+  const [tillId, setTillId] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  useEffect(() => { api<{ items: Till[] }>('/tills').then(({ data }) => setOpenTills(data.items.filter((t) => t.open))).catch(() => {}); }, []);
 
   const submit = async () => {
-    setBusy(true); setError('');
-    try { await api(`/invoices/${doc.id}/void`, { method: 'POST', body: { reason, restock, refundMethod: refund }, headers: key }); onDone(); }
-    catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+    setBusy(true); setError(''); setFieldErrors({});
+    try { await api(`/invoices/${doc.id}/void`, { method: 'POST', body: { reason, restock, refundMethod: refund, ...(tillId && (refund === 'cash' || refund === 'original') ? { tillId } : {}) }, headers: key }); onDone(); }
+    catch (e) { setError(errorText(e)); if (e instanceof ApiError) setFieldErrors(e.fieldErrors); } finally { setBusy(false); }
   };
 
   return (
@@ -120,7 +123,16 @@ function VoidDialog({ doc, onClose, onDone }: { doc: TaxDocument; onClose: () =>
             <select className="ui-select" value={refund} onChange={(e) => setRefund(e.target.value)}>
               {['cash', 'upi', 'card', 'other', 'original', 'none'].map((m) => <option key={m} value={m}>{PAY_METHOD[m]}</option>)}
             </select>
+            {fieldErrors.refundMethod && <span className="ui-error">{fieldErrors.refundMethod[0]}</span>}
           </label>
+          {(refund === 'cash' || refund === 'original') && openTills.length > 1 && (
+                <label className="ui-field"><span className="ui-label">Cash comes out of</span>
+                  <select className="ui-select" value={tillId} onChange={(e) => setTillId(e.target.value)} aria-invalid={!!fieldErrors.tillId}>
+                    <option value="">Choose the till…</option>
+                    {openTills.map((t) => <option key={t.id} value={t.id}>{t.name}{new Set(openTills.map((x) => x.outletId)).size > 1 ? ` · ${t.outlet}` : ''}</option>)}
+                  </select>
+                  {fieldErrors.tillId && <span className="ui-error">{fieldErrors.tillId[0]}</span>}</label>
+              )}
           {error && <div className="ui-alert ui-alert--danger" role="alert"><div className="ui-alert-body">{error}</div></div>}
         </div>
         <div className="ui-dialog-foot">

@@ -21,7 +21,7 @@ Templates use `{{field}}` (escaped), dotted paths such as `{{plans.store.priceMo
 
 ## Fill in `site.config.json`
 
-- `productName` is "TRIDENT" (chosen 2026-10-21; trademark search still to do).
+- `productName` is "GroPop" (chosen 2026-11-08, replacing TRIDENT; trademark search still to do).
 - `appUrl` e.g. `https://app.example.in`; `signupUrl` = appUrl + `/register`; `loginUrl` = appUrl + `/login`. Check both
   paths against your Phase 1 sign-in pages.
 - `whatsappNumber`: digits only with country code (`91` + 10 digits). `whatsappDisplay`: how it is shown.

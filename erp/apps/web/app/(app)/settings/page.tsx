@@ -10,19 +10,6 @@ const TEXT: [string, string][] = [
   ['locale', 'Locale'], ['currency', 'Currency'],
 ];
 
-// Browsers list some zones under their old names (Chrome has Asia/Calcutta, not Asia/Kolkata). Show the current
-// names, and always include the saved value, so the select never falls back to the first zone and saves that by mistake.
-const RENAMED: Record<string, string> = {
-  'Asia/Calcutta': 'Asia/Kolkata', 'Asia/Katmandu': 'Asia/Kathmandu', 'Asia/Rangoon': 'Asia/Yangon',
-  'Asia/Saigon': 'Asia/Ho_Chi_Minh', 'Europe/Kiev': 'Europe/Kyiv', 'America/Buenos_Aires': 'America/Argentina/Buenos_Aires',
-};
-function zoneOptions(saved: string | null) {
-  const list = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
-  const names = new Set(list.map((z) => RENAMED[z] ?? z));
-  if (saved) names.add(saved);
-  return [...names].sort();
-}
-
 export default function Settings() {
   const canManage = useCan('settings.manage');
   const [s, setS] = useState<S | null>(null);
@@ -51,10 +38,10 @@ export default function Settings() {
             {fieldErrors[k]?.map((t) => <span key={t} className="field-error">{t}</span>)}
           </label>
         ))}
-        <label>Timezone
-          <select name="timezone" defaultValue={s.timezone ?? ''} disabled={!canManage}>
-            {zoneOptions(s.timezone).map((z) => <option key={z}>{z}</option>)}
-          </select>
+        <label>Date and time
+          {/* v2 (D93): India only, so always IST; saving also repairs a store that had another zone. */}
+          <input className="input" value="India Standard Time (IST, UTC+5:30)" readOnly disabled />
+          <input type="hidden" name="timezone" value="Asia/Kolkata" />
         </label>
       </div>
       {error && <div className="alert error" role="alert">{error}</div>}

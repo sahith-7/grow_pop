@@ -4,16 +4,22 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { money } from '../../../lib/format';
+import { HitRow, searchHits, Suggestions, useSuggest, type SearchHit } from '../../../lib/suggest';
 import { api, type Balance, errorText, type StockMeta } from '../../../lib/stock-api';
 import { ItemCell } from './_components/item-picker';
+import { useOutletInView, useRoomsInView } from '../../../lib/outlet-scope';
 
 function StockPage() {
   const router = useRouter();
   const params = useSearchParams();
   const locationId = params.get('locationId') ?? '';
+  const inView = useOutletInView();
   const lowStock = params.get('lowStock') === 'true';
   const [q, setQ] = useState(params.get('q') ?? '');
+  const sg = useSuggest<SearchHit>({ q, load: (t) => searchHits(t, ['product']) });
+  const pickHit = (h: SearchHit) => { sg.quiet(h.title); setQ(h.title); setParam('q', h.title); };
   const [meta, setMeta] = useState<StockMeta | null>(null);
+  const rooms = useRoomsInView(meta?.locations);   // v2 (D115)
   const [items, setItems] = useState<Balance[] | null>(null);
   const [cursors, setCursors] = useState<string[]>([]);
   const [next, setNext] = useState<string | null>(null);
@@ -58,10 +64,14 @@ function StockPage() {
 
       <div className="ui-panel">
         <form className="ui-toolbar" role="search" onSubmit={(e) => { e.preventDefault(); setParam('q', q.trim()); }}>
-          <input className="ui-input ui-search" placeholder="Search name, SKU or scan barcode" aria-label="Search stock" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+          <div className="gp-suggest">
+            <input className="ui-input ui-search" placeholder="Search name, SKU or scan barcode" aria-label="Search stock" value={q} onChange={(e) => setQ(e.target.value)} autoFocus
+              {...sg.inputProps} onKeyDown={(e) => sg.onKeyDown(e, pickHit)} />
+            <Suggestions s={sg} onPick={pickHit} render={(h) => <HitRow hit={h} />} label="Matching products" />
+          </div>
           <select className="ui-select" aria-label="Location" value={locationId} onChange={(e) => setParam('locationId', e.target.value)}>
-            <option value="">All locations</option>
-            {meta?.locations.filter((l) => l.active).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            <option value="">{inView ? `All at ${inView.name}` : 'All locations'}</option>
+            {rooms.filter((l) => l.active).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
           <button className="ui-chip" type="button" aria-pressed={lowStock} onClick={() => setParam('lowStock', lowStock ? '' : 'true')}>Low stock</button>
         </form>

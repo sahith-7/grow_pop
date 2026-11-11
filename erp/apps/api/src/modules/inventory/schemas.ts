@@ -16,6 +16,7 @@ export const locationInput = z.object({
   name: z.string().trim().min(1).max(60),
   type: z.enum(LOCATION_TYPES),
   isSellable: z.boolean().optional(),
+  outletId: z.string().uuid().optional(),
 }).strict();
 export const locationPatch = z.object({
   name: z.string().trim().min(1).max(60),
@@ -60,6 +61,7 @@ export const MOVEMENT_TYPES = ['opening', 'receipt', 'sale', 'dispatch', 'adjust
   'return_in', 'supplier_return', 'stocktake', 'reversal'] as const;
 export const movementsQuery = z.object({
   variantId: uuid.optional(),
+  productId: uuid.optional(),     // v2 (D88): the product ledger, every variant of one product
   locationId: uuid.optional(),
   movementType: z.enum(MOVEMENT_TYPES).optional(),
   sourceId: uuid.optional(),

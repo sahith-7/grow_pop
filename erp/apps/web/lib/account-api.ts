@@ -1,4 +1,5 @@
 // Shapes for the B7 screens: the subscription banner, the Account page and Getting started. Calls go through catalog-api's api().
+import { fmtDate } from './datetime';
 export { api, ApiError, errorText } from './catalog-api';
 
 export type StoreState = 'trial' | 'active' | 'past_due' | 'suspended' | 'closed';
@@ -24,7 +25,7 @@ export const STATE_LABEL: Record<StoreState, [tone: string, label: string]> = {
 
 const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
 export const rupees = (paise: number | null) => (paise === null ? '—' : inr.format(paise / 100));
-export const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+export const day = (iso: string | null) => fmtDate(iso);
 export const daysLeft = (iso: string | null) => (iso ? Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000)) : 0);
 export const contact = (s: Subscription['support']) =>
   [s.whatsapp && `WhatsApp ${s.whatsapp}`, s.email].filter(Boolean).join(' or ') || 'us';

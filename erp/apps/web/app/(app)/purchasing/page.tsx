@@ -44,7 +44,7 @@ function PurchasingPage() {
       <div className="ui-page-header">
         <h1 className="ui-h1">Purchasing</h1>
         <div className="ui-actions">
-          {can?.purchaseManage && <Link className="ui-btn" href="/suppliers">Suppliers</Link>}
+          {can?.purchaseManage && <Link className="ui-btn" href="/contacts?type=supplier">Suppliers</Link>}
           {can?.purchaseManage && <Link className="ui-btn" href="/purchasing/returns/new">Return to supplier</Link>}
           {can?.purchaseReceive && <Link className="ui-btn" href="/purchasing/receive">Receive without an order</Link>}
           {can?.purchaseManage && <Link className="ui-btn ui-btn--primary" href="/purchasing/new">New purchase order</Link>}

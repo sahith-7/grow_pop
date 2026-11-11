@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Retail ERP design tokens (Phase 2 visual language, direction A "Ledger")
+   GroPop design tokens (v2, D92; replaced Phase 2's "Ledger" palette)
    The ONLY file that holds raw colour, font and size values.
    Components and screens use var(--token) and never literals.
    Rebrand = edit this file (and brand.ts). Contrast ratios in comments are
@@ -7,36 +7,57 @@
    ========================================================================== */
 
 :root {
-  /* ---- Brand ---------------------------------------------------------- */
-  --brand-ink:        #2F45B8;  /* primary actions, links, selection     7.9:1 */
-  --brand-ink-hover:  #24379A;  /*                                       10.1:1 */
-  --brand-ink-soft:   #ECEFFB;  /* selected row, active nav background         */
-  --brand-marigold:   #E8A317;  /* logo mark + scan-ready pulse ONLY, never text on white */
+  /* ---- Brand (GroPop, v2 D92) ------------------------------------------- */
+  /* Classic retail-ERP look: white panels on a cool light background, one bright blue for actions, GroPop navy for
+     text and the brand, wine only in the logo. Ratios against #fff; all text pairs meet WCAG 2.2 AA.             */
+  --brand-ink:        #1769D2;  /* primary actions, links, selection     5.2:1 */
+  --brand-ink-hover:  #0F55AE;  /*                                       7.2:1 */
+  --brand-ink-soft:   #E9F2FD;  /* selected row, active nav background         */
+  --brand-navy:       #0B2447;  /* brand name, POS button, headings      15.6:1 */
+  --brand-navy-hover: #163A6B;
+  --brand-wine:       #8B2E2E;  /* logo mark only                              */
+  --brand-marigold:   #E8A317;  /* scan-ready pulse ONLY, never text on white  */
 
-  /* ---- Neutrals (cool, biased toward the brand blue) ------------------ */
-  --bg:               #F6F7F9;  /* app background                               */
+  /* ---- Neutrals ------------------------------------------------------- */
+  --bg:               #F3F6FA;  /* app background                               */
   --surface:          #FFFFFF;  /* panels, tables, inputs                       */
-  --surface-sunken:   #EEF0F4;  /* table header, read-only fields, code         */
-  --border:           #DDE1E8;  /* dividers, panel outlines (decorative)        */
-  --border-control:   #8A93A3;  /* input/checkbox outlines                3.1:1 */
-  --text:             #161B26;  /* body                          16.1:1 on --bg */
-  --text-2:           #4A5363;  /* secondary                                7.8:1 */
-  --text-3:           #626B7D;  /* captions, placeholders                   5.4:1 */
+  --surface-sunken:   #F1F4F8;  /* table header, read-only fields, code         */
+  --border:           #E2E7EF;  /* dividers, panel outlines (decorative)        */
+  --border-control:   #7F8A9D;  /* input/checkbox outlines                3.5:1 */
+  --text:             #18212F;  /* body                                  15.9:1 */
+  --text-2:           #4A5568;  /* secondary                              7.5:1 */
+  --text-3:           #5F6B7D;  /* captions, placeholders                 5.4:1 */
   --text-on-brand:    #FFFFFF;
 
   /* ---- Status (never the only signal: always paired with text/icon) --- */
-  --success:          #13723A;  --success-soft: #E8F5EC;   /* 6.0 / 5.4 on soft */
-  --warning:          #8A5300;  --warning-soft: #FDF3E1;   /* 6.3 / 5.8 */
-  --danger:           #B42318;  --danger-soft:  #FDECEA;   /* 6.6 / 5.8 */
-  --info:             #0B6690;  --info-soft:    #E6F3F9;   /* 6.3 / 5.6 */
-  --neutral-badge:    #4A5363;  --neutral-soft: #EEF0F4;
+  --success:          #13723A;  --success-soft: #E8F5EC;
+  --warning:          #8A5300;  --warning-soft: #FDF3E1;
+  --danger:           #B42318;  --danger-soft:  #FDECEA;
+  --info:             #0B6690;  --info-soft:    #E6F3F9;
+  --neutral-badge:    #4A5568;  --neutral-soft: #EEF1F5;
+
+  /* ---- KPI tiles: a soft fill and a strong figure per family (dashboard) */
+  --tile-green-bg:  #EEF8F1;  --tile-green-fg:  #11703A;
+  --tile-violet-bg: #F4F0FD;  --tile-violet-fg: #5B34B8;
+  --tile-amber-bg:  #FFF7E8;  --tile-amber-fg:  #8A5300;
+  --tile-rose-bg:   #FDF0F3;  --tile-rose-fg:   #A3213F;
+  --tile-blue-bg:   #EEF5FE;  --tile-blue-fg:   #1556B0;
+
+  /* ---- Charts: categorical series in this fixed order, never cycled ------- */
+  /* Validated with the dataviz palette checker (adjacent pairs pass CVD and normal-vision floors). Slots 3-5 sit
+     under 3:1 on white, so every chart names each series in text (legend + amounts) and offers a table view.   */
+  --viz-1: #2a78d6;  /* blue    : sales, cash        */
+  --viz-2: #eb6834;  /* orange  : purchases, UPI     */
+  --viz-3: #1baf7a;  /* aqua    : card               */
+  --viz-4: #eda100;  /* yellow  : other              */
+  --viz-5: #e87ba4;  /* magenta : original payment   */
+  --viz-grid: #E9EDF3;
 
   /* ---- Typography ------------------------------------------------------ */
-  /* IBM Plex: true tabular figures, a Devanagari sibling for Hindi later,
-     open licence. Self-host the woff2 files in production (no third-party
-     font CDN: CSP + privacy + offline-tolerant counters).                  */
-  --font-sans: 'IBM Plex Sans', 'IBM Plex Sans Devanagari', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Plus Jakarta Sans (OFL), self-hosted from the @fontsource package: no font CDN, so the strict CSP stays and no
+     visitor data goes to a third party. Figures in tables use tabular-nums.                                      */
+  --font-sans: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* scale (px): 12 13 14 16 18 20 24 30 */
   --text-xs: 0.75rem;   --lh-xs: 1rem;      /* captions, badges           */
@@ -45,9 +66,9 @@
   --text-lg: 1rem;      --lh-lg: 1.5rem;    /* section titles, POS lines  */
   --text-xl: 1.125rem;  --lh-xl: 1.5rem;    /* panel titles               */
   --text-2xl: 1.25rem;  --lh-2xl: 1.75rem;  /* page titles                */
-  --text-3xl: 1.5rem;   --lh-3xl: 2rem;     /* KPI values                 */
+  --text-3xl: 1.375rem; --lh-3xl: 1.75rem;  /* KPI values                 */
   --text-4xl: 1.875rem; --lh-4xl: 2.25rem;  /* POS total                  */
-  --weight-regular: 400; --weight-medium: 500; --weight-semibold: 600;
+  --weight-regular: 400; --weight-medium: 500; --weight-semibold: 600; --weight-bold: 700;
 
   /* ---- Spacing (4 px base) --------------------------------------------- */
   --space-0: 0;     --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
@@ -60,14 +81,16 @@
   --control-h-lg: 48px;   /* POS, pick screens, touch (>= 44px target)      */
   --row-h:        40px;   /* table row, compact                             */
   --row-h-touch:  52px;   /* table row on counter screens                   */
-  --sidebar-w:    232px;  --sidebar-w-collapsed: 64px;  --topbar-h: 56px;
+  --sidebar-w:    240px;  --sidebar-w-collapsed: 64px;  --topbar-h: 60px;
   --content-max:  1440px;
 
   /* ---- Shape & depth ---------------------------------------------------- */
-  --radius-sm: 4px;   /* inputs, badges, buttons */
-  --radius-md: 8px;   /* panels, dialogs         */
+  --radius-sm: 6px;   /* inputs, badges, buttons */
+  --radius-md: 10px;  /* panels, dialogs, tiles  */
+  --radius-lg: 14px;  /* page sections           */
   --radius-pill: 999px;
-  --shadow-overlay: 0 8px 24px rgba(22, 27, 38, .16), 0 2px 6px rgba(22, 27, 38, .08); /* menus, dialogs, toasts only */
+  --shadow-overlay: 0 8px 24px rgba(11, 36, 71, .16), 0 2px 6px rgba(11, 36, 71, .08); /* menus, dialogs, toasts only */
+  --shadow-card: 0 1px 2px rgba(11, 36, 71, .05);                                       /* panels on the grey background */
   --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--brand-ink);
 
   /* ---- Motion ----------------------------------------------------------- */
@@ -92,6 +115,7 @@
   --danger:  #FF8A80; --danger-soft:  #3A1A18;
   --info:    #6CC3EC; --info-soft:    #10293A;
   --neutral-badge: #A9B1C0; --neutral-soft: #222733;
+  --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-4: #c98500; --viz-5: #d55181; --viz-grid: #2E3442;
   --shadow-overlay: 0 8px 24px rgba(0,0,0,.5);
   color-scheme: dark;
 }

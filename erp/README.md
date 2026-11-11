@@ -1,4 +1,4 @@
-# TRIDENT
+# GroPop
 
 Retail ERP for Indian stores as a multi-store SaaS: counter billing with GST invoices, products and barcodes, stock and
 purchasing, stocktakes, WooCommerce sync with web orders, picking and dispatch, reports, plans and billing, and a

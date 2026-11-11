@@ -94,9 +94,10 @@ export async function platformRoutes(app: FastifyInstance) {
 
   app.get('/tenants/:id', async (req) => {
     const { id: tenant } = id.parse(req.params);
-    const [r] = await call<{ t: unknown }>('SELECT platform_tenant($1, $2) AS t', [sessionHash(req), tenant]);
+    const [r] = await call<{ t: Record<string, unknown> | null }>('SELECT platform_tenant($1, $2) AS t', [sessionHash(req), tenant]);
     if (!r?.t) throw appError(404, 'NOT_FOUND', 'Store not found');
-    return r.t;
+    const [o] = await call<{ o: unknown }>('SELECT platform_tenant_outlets($1, $2) AS o', [sessionHash(req), tenant]);
+    return { ...r.t, outlets: o.o };
   });
 
   app.post('/tenants/:id/payments', async (req, reply) => {
@@ -135,6 +136,14 @@ export async function platformRoutes(app: FastifyInstance) {
     const { id: tenant } = id.parse(req.params);
     const b = z.object({ planId: z.string().min(1).max(40), reason }).strict().parse(req.body);
     await call('SELECT platform_set_plan($1, $2, $3, $4, $5)', [sessionHash(req), tenant, b.planId, b.reason, req.ip]);
+    return { ok: true };
+  });
+
+  // Extra outlets (v2, D101): switched on after the owner pays for them.
+  app.post('/tenants/:id/outlets', async (req) => {
+    const { id: tenant } = id.parse(req.params);
+    const b = z.object({ extraOutlets: z.number().int().min(0).max(50), reason }).strict().parse(req.body);
+    await call('SELECT platform_set_outlets($1, $2, $3, $4, $5)', [sessionHash(req), tenant, b.extraOutlets, b.reason, req.ip]);
     return { ok: true };
   });
 

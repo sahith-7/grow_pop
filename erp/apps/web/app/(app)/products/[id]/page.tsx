@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { api, errorText, type Product } from '../../../../lib/catalog-api';
+import { useCan } from '../../../../lib/me';
 import { OnlinePanel } from '../_components/online-panel';
+import { ProductLedger } from '../_components/product-ledger';
 import { ProductForm } from '../_components/product-form';
 import { useMeta } from '../_components/use-meta';
 
@@ -17,6 +19,7 @@ export default function ProductPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [error, setError] = useState('');
   const [formKey, setFormKey] = useState(0);
+  const seeStock = useCan('stock.read');
 
   useEffect(() => {
     api<Product>(`/products/${id}`).then((r) => setProduct(r.data)).catch((e) => setError(errorText(e)));
@@ -41,7 +44,7 @@ export default function ProductPage() {
   return (
     <div className="ui-content">
       <div className="ui-page-header">
-        <div><Link className="ui-caption" href="/products">Products /</Link><h1 className="ui-h1">{product.name}</h1></div>
+        <div><nav className="gp-crumbs" aria-label="Breadcrumb"><Link href="/products">Products</Link><span aria-hidden="true">/</span><span>Edit</span></nav><h1 className="ui-h1">{product.name}</h1></div>
         <span className={`ui-badge${tone ? ` ui-badge--${tone}` : ''}`}>{label}</span>
         <div className="ui-actions">
           <button className="ui-btn" type="button" onClick={() => router.push(`/products/labels?variants=${activeIds.join(',')}`)}>Print labels</button>
@@ -52,6 +55,7 @@ export default function ProductPage() {
       {notice && <div className="ui-alert ui-alert--success" role="status"><div className="ui-alert-body">{notice}</div></div>}
       <OnlinePanel product={product} canWrite={meta.can.write} onChanged={(p) => { if (p.version !== product.version) setFormKey((k) => k + 1); setProduct(p); }} />
       <ProductForm key={formKey} product={product} meta={meta} onSaved={saved} onImagesChanged={setProduct} />
+      {seeStock && <ProductLedger productId={product.id} variable={product.type === 'variable'} />}
     </div>
   );
 }

@@ -31,7 +31,7 @@ export function TotpSetup({ required, onDone }: { required?: boolean; onDone: ()
     <div className="stack">
       <h1 style={{ margin: 0 }}>Protect the owner account</h1>
       <p className="muted" style={{ margin: 0 }}>
-        {required ? 'Before you continue, ' : ''}add {BRAND.name} to an authenticator app on your phone (Google Authenticator,
+        {required ? 'Before you continue, add' : 'Add'} {BRAND.name} to an authenticator app on your phone (Google Authenticator,
         Microsoft Authenticator, Aegis or 1Password). From then on, signing in as owner needs your password and the 6-digit code
         from the app, so a stolen password alone can’t open your store.
       </p>

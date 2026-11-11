@@ -5,7 +5,7 @@ const schema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     // Shown in WooCommerce (webhook names), e-mails and authenticator apps. Keep in step with web lib/brand.ts.
-    APP_NAME: z.string().min(1).max(40).default('TRIDENT ERP'),
+    APP_NAME: z.string().min(1).max(40).default('GroPop'),
     // 32 random bytes, base64: `openssl rand -base64 32`. Encrypts Woo credentials and authenticator secrets at rest (T4, D83).
     WOO_ENC_KEY: z.string().optional(),
     // The previous key during a rotation: still decrypts, never encrypts.

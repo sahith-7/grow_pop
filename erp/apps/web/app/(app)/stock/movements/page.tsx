@@ -6,16 +6,20 @@ import { Suspense, useEffect, useState } from 'react';
 import { money } from '../../../../lib/format';
 import { api, dateTime, errorText, idemKey, MOVEMENT_LABEL, type Movement, signed, type StockMeta } from '../../../../lib/stock-api';
 import { ItemCell } from '../_components/item-picker';
+import { useOutletInView, useRoomsInView } from '../../../../lib/outlet-scope';
+import { istDayStart } from '@/lib/datetime';
 
 const REVERSIBLE = new Set(['adjustment', 'transfer']);
 // A local calendar day as the API's ISO range: from = start of the day, to = start of the next day.
-const dayStart = (d: string, plusDays = 0) => { const t = new Date(`${d}T00:00:00`); t.setDate(t.getDate() + plusDays); return t.toISOString(); };
+const dayStart = (d: string, plusDays = 0) => istDayStart(d, plusDays);   // store days are Indian days (D93)
 
 function MovementsPage() {
   const router = useRouter();
   const params = useSearchParams();
   const posted = params.get('posted');
   const [meta, setMeta] = useState<StockMeta | null>(null);
+  const rooms = useRoomsInView(meta?.locations);   // v2 (D115)
+  const inView = useOutletInView();
   const [items, setItems] = useState<Movement[] | null>(null);
   const [cursors, setCursors] = useState<string[]>([]);
   const [next, setNext] = useState<string | null>(null);
@@ -57,8 +61,8 @@ function MovementsPage() {
       <div className="ui-panel">
         <div className="ui-toolbar">
           <select className="ui-select" aria-label="Location" value={params.get('locationId') ?? ''} onChange={(e) => setParam('locationId', e.target.value)}>
-            <option value="">All locations</option>
-            {meta?.locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.active ? '' : ' (inactive)'}</option>)}
+            <option value="">{inView ? `All at ${inView.name}` : 'All locations'}</option>
+            {rooms.map((l) => <option key={l.id} value={l.id}>{l.name}{l.active ? '' : ' (inactive)'}</option>)}
           </select>
           <select className="ui-select" aria-label="Type" value={params.get('movementType') ?? ''} onChange={(e) => setParam('movementType', e.target.value)}>
             <option value="">All types</option>

@@ -1,3 +1,4 @@
+import { locIn, pusher, seriesIn, type Scope } from '../outlets/scope.js';
 import { z } from 'zod';
 import type { Tx } from '../../db.js';
 import { qty } from '../../lib/decimal.js';
@@ -9,6 +10,9 @@ import { creditNoteDetail, fyNow, takeNumber } from '../billing/documents.js';
 import { loadProfile, posLocation } from '../billing/profile.js';
 import { activeLocation } from '../inventory/service.js';
 import { post, type Move } from '../inventory/ledger.js';
+import type { Role } from '../../lib/permissions.js';
+import { refundMethodId } from '../cash/methods.js';
+import { refundSession } from '../cash/registers.js';
 
 // Customer returns (J12, 5.7, AC-14) and invoice voids. Each one posts a credit note against the original invoice, which is
 // never changed (CGST s.34). Amounts are the invoice's own, in proportion to the quantity returned, never today's prices;
@@ -19,6 +23,8 @@ export const returnInput = z.object({
   reason: z.string().trim().min(3, 'Give a reason').max(500),
   refundMethod: z.enum(['cash', 'card', 'upi', 'other', 'original', 'none']),
   locationId: z.string().uuid().optional(),
+  /** The till cash is given back from (v2, D110). Without it, the only register open at the outlet. */
+  tillId: z.string().uuid().optional(),
   lines: z.array(z.object({
     invoiceLineId: z.string().uuid(),
     qty,
@@ -31,21 +37,33 @@ export const voidInput = z.object({
   reason: z.string().trim().min(3, 'Give a reason').max(500),
   restock: z.boolean(),
   refundMethod: z.enum(['cash', 'card', 'upi', 'other', 'original', 'none']),
+  tillId: z.string().uuid().optional(),
 }).strict();
 
 const invalid = (fieldErrors: Record<string, string[]>) => appError(400, 'VALIDATION_ERROR', 'Check the highlighted fields', fieldErrors);
 
 interface Credited { qty: bigint; taxable: bigint; cgst: bigint; sgst: bigint; igst: bigint }
 
-export async function postReturn(tx: Tx, actorId: string, input: ReturnInput, kind: 'return' | 'void' = 'return') {
-  const p = await loadProfile(tx);
-  // One return per invoice at a time: the second waits, then sees what the first credited. (A row lock would need UPDATE
-  // on invoices, which the runtime role does not have.)
-  await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 5))', [`invoice:${input.invoiceId}`]);
+/** An exchange (v2, D108) uses the credit note to pay for a new bill instead of refunding it. */
+export type RefundMethod = ReturnInput['refundMethod'] | 'exchange';
+
+/** One return per invoice at a time: the second waits, then sees what the first credited. (A row lock would need UPDATE on
+ * invoices, which the runtime role does not have.) */
+export const lockInvoice = (tx: Tx, invoiceId: string) => tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 5))', [`invoice:${invoiceId}`]);
+
+/**
+ * What a return would credit, without writing anything: for the return itself and for the exchange screen's preview.
+ * Refuses a voided invoice, a GST credit note past its deadline, and more than is left to return.
+ */
+export async function planReturn(tx: Tx, input: { invoiceId: string; lines: ReturnInput['lines'] }) {
   const { rows: [inv] } = await tx.query(
-    `SELECT i.*, o.location_id AS order_location_id, o.channel, o.number AS order_number FROM invoices i JOIN sales_orders o ON o.id = i.order_id WHERE i.id = $1`,
+    `SELECT i.*, o.location_id AS order_location_id, o.channel, o.number AS order_number, o.customer_id AS order_customer_id
+       FROM invoices i JOIN sales_orders o ON o.id = i.order_id WHERE i.id = $1`,
     [input.invoiceId]);
   if (!inv) throw appError(404, 'NOT_FOUND', 'Invoice not found');
+  // The credit note comes from the outlet that issued the invoice (its GSTIN, its series), wherever the goods come back to.
+  const { rows: [series] } = await tx.query('SELECT outlet_id FROM invoice_series WHERE id = $1', [inv.series_id]);
+  const p = await loadProfile(tx, series.outlet_id);
   const { rows: [voided] } = await tx.query("SELECT number FROM credit_notes WHERE invoice_id = $1 AND kind = 'void'", [inv.id]);
   if (voided) throw appError(409, 'INVOICE_VOIDED', `This invoice was voided by credit note ${voided.number}`);
 
@@ -104,17 +122,83 @@ export async function postReturn(tx: Tx, actorId: string, input: ReturnInput, ki
     if (rest > -100n && rest < 100n) ro = rest;
   }
   const total = sum + ro;
+  return { inv, p, out, ro, total, finishes };
+}
+
+export interface ReturnActor { userId: string; role: Role }
+type Plan = Awaited<ReturnType<typeof planReturn>>;
+
+/**
+ * The store's return rules (v2, D113), set on Billing & GST: how many days after the bill, categories that can't come back,
+ * and whether money is given back at all or only exchanges. The owner, who sets them, isn't held to them; a void (a
+ * mistake on the bill) never is.
+ */
+export async function checkReturnRules(tx: Tx, actor: ReturnActor, plan: Plan, refundMethod: RefundMethod) {
+  if (actor.role === 'owner') return;
+  const { inv, p, out } = plan;
+  const s = p.settings;
+  if (s.returnDays) {
+    const billed = localDate(new Date(inv.issued_at), p.timezone);
+    const today = localDate(new Date(), p.timezone);
+    const age = Math.round((Date.parse(today) - Date.parse(billed)) / 86_400_000);
+    if (age > s.returnDays) {
+      throw appError(409, 'RETURN_WINDOW', `Bill ${inv.number} is ${age} days old. This store takes items back within ${s.returnDays} day${s.returnDays === 1 ? '' : 's'} of the bill. The owner can still take it back.`);
+    }
+  }
+  const variants = out.map((o) => o.line.variant_id as string | null).filter((v): v is string => !!v);
+  if (variants.length) {
+    // A category marked "no returns" covers its sub-categories too.
+    const { rows } = await tx.query(
+      `WITH RECURSIVE up AS (
+         SELECT v.id AS variant_id, c.id, c.parent_id, c.name, c.no_returns, 0 AS depth
+           FROM product_variants v JOIN products pr ON pr.id = v.product_id JOIN categories c ON c.id = pr.category_id WHERE v.id = ANY($1::uuid[])
+         UNION ALL
+         SELECT up.variant_id, c.id, c.parent_id, c.name, c.no_returns, up.depth + 1 FROM up JOIN categories c ON c.id = up.parent_id WHERE up.depth < 20)
+       SELECT DISTINCT ON (variant_id) variant_id, name FROM up WHERE no_returns ORDER BY variant_id, depth`, [variants]);
+    if (rows.length) {
+      const blocked = new Map(rows.map((r) => [r.variant_id as string, r.name as string]));
+      const errors: Record<string, string[]> = {};
+      out.forEach((o, i) => { const c = blocked.get(o.line.variant_id); if (c) errors[`lines.${i}.invoiceLineId`] = [`${c} items can't be returned`]; });
+      const names = [...new Set(blocked.values())];
+      throw appError(409, 'RETURN_CATEGORY', `${names.join(', ')} items can't be returned at this store. The owner can still take them back.`, errors);
+    }
+  }
+  if (!s.returnMoneyBack && refundMethod !== 'none' && refundMethod !== 'exchange') {
+    throw appError(409, 'EXCHANGE_ONLY', 'This store gives exchanges, not money back. Exchange it at the counter, or ask the owner.', { refundMethod: ['Exchange only'] });
+  }
+}
+
+/**
+ * "Back the way it was paid" on a counter bill means the method the bill was paid with, so the drawer knows whether cash
+ * left it. A bill paid in two ways (or by an exchange credit) needs the method chosen. A web order's "original" stays as it
+ * is: the shop's payment gateway refunds it.
+ */
+async function concreteMethod(tx: Tx, inv: Record<string, any>, method: RefundMethod): Promise<RefundMethod> {
+  if (method !== 'original' || inv.channel !== 'pos') return method;
+  const { rows } = await tx.query("SELECT DISTINCT method FROM payments WHERE order_id = $1 AND kind = 'payment'", [inv.order_id]);
+  if (rows.length === 1 && rows[0].method !== 'exchange') return rows[0].method as RefundMethod;
+  throw appError(400, 'VALIDATION_ERROR', 'Check the highlighted fields', { refundMethod: ['This bill was paid more than one way: choose how the money goes back'] });
+}
+
+export async function postReturn(tx: Tx, actor: ReturnActor, input: Omit<ReturnInput, 'refundMethod' | 'tillId'> & { refundMethod: RefundMethod; tillId?: string },
+  kind: 'return' | 'void' = 'return') {
+  const actorId = actor.userId;
+  await lockInvoice(tx, input.invoiceId);
+  const plan = await planReturn(tx, input);
+  const { inv, p, out, ro, total, finishes } = plan;
+  if (kind === 'return') await checkReturnRules(tx, actor, plan, input.refundMethod);
+  const refundMethod = await concreteMethod(tx, inv, input.refundMethod);
 
   // Stock comes back: resellable to sellable stock, damaged to non-sellable (written off or returned to the supplier later).
   const location = input.locationId
-    ? await activeLocation(tx, input.locationId, 'locationId')
+    ? await activeLocation(tx, input.locationId, 'locationId', actor.userId)
     : inv.order_location_id ? await activeLocation(tx, inv.order_location_id, 'locationId') : await posLocation(tx, p);
 
   const number = await nextNumber(tx, 'RET');
   const { rows: [ret] } = await tx.query(
     `INSERT INTO customer_returns (tenant_id, number, order_id, invoice_id, location_id, reason, refund_method, posted_by)
      VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7) RETURNING id, posted_at`,
-    [number, inv.order_id, inv.id, location.id, input.reason, input.refundMethod, actorId]);
+    [number, inv.order_id, inv.id, location.id, input.reason, refundMethod, actorId]);
   const { rows: retLines } = await tx.query(
     `INSERT INTO customer_return_lines (tenant_id, return_id, invoice_line_id, variant_id, qty, condition)
      SELECT current_setting('app.tenant_id')::uuid, $1, r.invoice_line_id, r.variant_id, r.qty, r.condition
@@ -131,7 +215,7 @@ export async function postReturn(tx: Tx, actorId: string, input: ReturnInput, ki
   await post(tx, actorId, moves);
 
   const fy = fyNow(p);
-  const { seriesId, number: cnNumber } = await takeNumber(tx, 'credit_note', fy, p.settings.creditNotePrefix);
+  const { seriesId, number: cnNumber } = await takeNumber(tx, 'credit_note', fy, p.settings.creditNotePrefix, p.outlet.id);
   const tSum = (k: 'taxable' | 'cgst' | 'sgst' | 'igst') => rupees(out.reduce((a, o) => a + o[k], 0n));
   const { rows: [cn] } = await tx.query(
     `INSERT INTO credit_notes (tenant_id, number, series_id, financial_year, invoice_id, return_id, kind, reason, seller, buyer,
@@ -152,10 +236,14 @@ export async function postReturn(tx: Tx, actorId: string, input: ReturnInput, ki
       line_total: rupees(o.taxable + o.cgst + o.sgst + o.igst),
     })))]);
 
-  if (input.refundMethod !== 'none' && total > 0n) {
+  // An exchange's refund rows are written with the new bill (pos/exchange.ts), once it is known how much the new bill uses.
+  // Money given back is tagged with the register it leaves (cash needs one when the store requires registers, D110).
+  if (refundMethod !== 'none' && refundMethod !== 'exchange' && total > 0n) {
+    const sessionId = await refundSession(tx, location.outletId, input.tillId, refundMethod, p.settings.requireRegister);
     await tx.query(
-      `INSERT INTO payments (tenant_id, order_id, kind, method, amount, return_id, recorded_by)
-       VALUES (current_setting('app.tenant_id')::uuid, $1, 'refund', $2, $3, $4, $5)`, [inv.order_id, input.refundMethod, rupees(total), ret.id, actorId]);
+      `INSERT INTO payments (tenant_id, order_id, kind, method, amount, return_id, recorded_by, method_id, session_id)
+       VALUES (current_setting('app.tenant_id')::uuid, $1, 'refund', $2, $3, $4, $5, $6, $7)`,
+      [inv.order_id, refundMethod, rupees(total), ret.id, actorId, await refundMethodId(tx, refundMethod), sessionId]);
   }
 
   // The order shows it: fully credited → refunded.
@@ -169,19 +257,19 @@ export async function postReturn(tx: Tx, actorId: string, input: ReturnInput, ki
       `${kind === 'void' ? 'Invoice voided' : 'Return'} ${number}: credit note ${cnNumber} for ₹${rupees(total)}${moves.length ? `, ${moves.length} line(s) back in stock` : ''}`, actorId]);
   await audit(tx, {
     actorId, action: kind === 'void' ? 'invoice.voided' : 'return.posted', entityType: 'invoice', entityId: inv.id,
-    summary: { invoice: inv.number, return: number, creditNote: cnNumber, total: rupees(total), refundMethod: input.refundMethod, reason: input.reason,
+    summary: { invoice: inv.number, return: number, creditNote: cnNumber, total: rupees(total), refundMethod, reason: input.reason,
       lines: out.map((o) => ({ sku: o.line.sku, qty: qtyText(o.q), condition: o.condition })) },
   });
 
   return {
     id: ret.id as string, number, creditNoteId: cn.id as string, creditNoteNumber: cnNumber, refundAmount: rupees(total),
-    refundMethod: input.refundMethod, restockedLines: moves.filter((m) => m.bucket === 'sellable').length,
+    refundMethod, restockedLines: moves.filter((m) => m.bucket === 'sellable').length,
     creditNote: await creditNoteDetail(tx, cn.id, p.timezone),
   };
 }
 
 /** Void = credit everything still uncredited on the invoice, in one credit note (owner only, invoice.void). */
-export async function voidInvoice(tx: Tx, actorId: string, invoiceId: string, input: z.infer<typeof voidInput>) {
+export async function voidInvoice(tx: Tx, actor: ReturnActor, invoiceId: string, input: z.infer<typeof voidInput>) {
   const { rows: [voided] } = await tx.query("SELECT number FROM credit_notes WHERE invoice_id = $1 AND kind = 'void'", [invoiceId]);
   if (voided) throw appError(409, 'INVOICE_VOIDED', `This invoice was already voided by credit note ${voided.number}`);
   const { rows } = await tx.query(
@@ -190,15 +278,20 @@ export async function voidInvoice(tx: Tx, actorId: string, invoiceId: string, in
   if (!rows.length) throw appError(404, 'NOT_FOUND', 'Invoice not found');
   const open = rows.filter((r) => milli(r.left_qty) > 0n);
   if (!open.length) throw appError(409, 'NOTHING_TO_CREDIT', 'Everything on this invoice has already been returned');
-  return postReturn(tx, actorId, {
-    invoiceId, reason: input.reason, refundMethod: input.refundMethod,
+  return postReturn(tx, actor, {
+    invoiceId, reason: input.reason, refundMethod: input.refundMethod, tillId: input.tillId,
     lines: open.map((r) => ({ invoiceLineId: r.id, qty: qtyText(milli(r.left_qty)), condition: input.restock && r.kind === 'item' ? 'resellable' as const : 'not_returned' as const })),
   }, 'void');
 }
 
-export async function listReturns(tx: Tx, f: { q?: string; limit: number; after: [string, string] | null }) {
+export async function listReturns(tx: Tx, f: { q?: string; limit: number; after: [string, string] | null; scope?: Scope }) {
   const params: unknown[] = [];
   const where: string[] = [];
+  // v2 (D115): a return is in view at the outlet that billed it (its credit note's series) and at the one that took it back.
+  if (f.scope?.ids) {
+    const p = pusher(params);
+    where.push(`(${seriesIn(f.scope, 'c.series_id', p)} OR ${locIn(f.scope, 'r.location_id', p)})`);
+  }
   if (f.q) { params.push(f.q.replace(/[%_\\]/g, '\\$&')); where.push(`(r.number ILIKE '%' || $${params.length} || '%' OR i.number ILIKE '%' || $${params.length} || '%' OR c.number ILIKE '%' || $${params.length} || '%')`); }
   if (f.after) { params.push(f.after[0], f.after[1]); where.push(`(r.posted_at, r.id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`); }
   params.push(f.limit + 1);

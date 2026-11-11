@@ -20,6 +20,10 @@ const TABLE_BY_SEGMENT: Record<string, string> = {
   'purchase-orders': 'purchase_orders', 'goods-receipts': 'goods_receipts', orders: 'sales_orders', jobs: 'sync_jobs',
   customers: 'customers', invoices: 'invoices', 'pick-lists': 'pick_lists', exports: 'data_exports',
   users: 'users',   // Phase 1's PATCH /v1/users/:id
+  'price-updates': 'price_updates',   // v2 batch 2 (D97); /v1/contacts/customers|suppliers/:id map through the segments above
+  outlets: 'outlets',   // v2 outlets (D101)
+  held: 'pos_held_bills', 'discount-requests': 'discount_requests', approvals: 'discount_requests',   // v2 phase 2 (D105, D107)
+  'payment-methods': 'payment_methods', tills: 'tills', registers: 'register_sessions', 'cash-movements': 'cash_movements',   // v2 phase 3 (D109–D111)
 };
 const TABLE_BY_PARAM: Record<string, string> = { imageId: 'product_images', lineId: 'pick_list_lines' };
 const LITERAL_PARAM: Record<string, string> = { action: 'submit', report: 'inventory-summary' };
@@ -78,10 +82,33 @@ beforeAll(async () => {
   const c = await api(A.cookie, 'POST', '/v1/customers', { name: `${tag} customer`, phone: `98${String(Date.now()).slice(-8)}` });
   expect(c.status, c.text).toBe(201);
   expect((await api(A.cookie, 'POST', '/v1/account/exports')).status).toBe(202);
+  const pv = await api(A.cookie, 'POST', '/v1/price-updates/preview', { filter: { productIds: [productId] }, field: 'mrp', method: 'set', value: '150' });
+  expect(pv.status, pv.text).toBe(200);
+  const run = await api(A.cookie, 'POST', '/v1/price-updates', { source: 'rule', description: `${tag} prices`,
+    lines: pv.body.rows.map((r: any) => ({ variantId: r.variantId, version: r.version, mrp: r.next.mrp })) }, { 'idempotency-key': randomUUID() });
+  expect(run.status, run.text).toBe(201);
+  await owner.query('UPDATE subscriptions SET extra_outlets = 1 WHERE tenant_id = $1', [A.tenantId]);
+  const ol = await api(A.cookie, 'POST', '/v1/outlets', { name: `${tag} outlet`, address: '1 Road', stateCode: '27', invoicePrefix: 'ISOA', creditNotePrefix: 'ISOC' });
+  expect(ol.status, ol.text).toBe(201);
+  const h = await api(A.cookie, 'POST', '/v1/pos/held', { cart: { lines: [{ variantId: v, qty: '1' }] }, label: `${tag} held` });
+  expect(h.status, h.text).toBe(201);
+  await owner.query(
+    `INSERT INTO discount_requests (tenant_id, outlet_id, requested_by, cart_hash, summary, discount_total, max_pct, reason, expires_at)
+     SELECT $1, main_outlet_id($1), u.id, repeat('a', 64), '{}', 10, 20, $2, now() + interval '30 minutes' FROM users u WHERE u.tenant_id = $1 LIMIT 1`,
+    [A.tenantId, `${tag} request`]);
   await owner.query("INSERT INTO sync_jobs (tenant_id, kind, resource_id, status, last_error) VALUES ($1, 'woo.product', $2, 'dead', 'x')", [A.tenantId, productId]);
+  // Cash control: a payment method, a till, a register with a drawer movement, closed (which leaves a notification).
+  expect((await api(A.cookie, 'POST', '/v1/payment-methods', { name: `${tag} pay`, kind: 'upi' })).status).toBe(201);
+  const tl = await api(A.cookie, 'POST', '/v1/tills', { outletId: ol.body.outlet.id, name: `${tag} till` });
+  expect(tl.status, tl.text).toBe(201);
+  const rg = await api(A.cookie, 'POST', '/v1/registers', { tillId: tl.body.id, openingCash: '500' });
+  expect(rg.status, rg.text).toBe(201);
+  const mv = await api(A.cookie, 'POST', `/v1/registers/${rg.body.id}/movements`, { kind: 'cash_in', amount: '100', category: 'Float added', reason: `${tag} float` });
+  expect(mv.status, mv.text).toBe(201);
+  expect((await api(A.cookie, 'POST', `/v1/registers/${rg.body.id}/close`, { countedCash: '600', keptCash: '500' })).status).toBe(200);
 
   for (const table of new Set([...Object.values(TABLE_BY_SEGMENT), ...Object.values(TABLE_BY_PARAM)])) {
-    const { rows: [r] } = await owner.query(`SELECT id::text FROM "${table}" WHERE tenant_id = $1 LIMIT 1`, [A.tenantId]);
+    const { rows: [r] } = await owner.query(`SELECT id::text FROM "${table}" WHERE tenant_id = $1 ${table === 'outlets' ? 'AND NOT is_main' : ''} LIMIT 1`, [A.tenantId]);
     expect(r, `seed store A with a row in ${table}`).toBeTruthy();
     ids[table] = r.id;
   }
@@ -122,6 +149,12 @@ describe('AC-01 tenant isolation sweep', () => {
       const res = await api(B.cookie, 'GET', r.url);
       if (res.status >= 500) leaks.push(`${res.status}: ${r.url}`);
       for (const m of [...markers, ...Object.values(ids), A.tenantId]) if (res.text.includes(m)) leaks.push(`${m} in ${r.url}`);
+    }
+    // Lists that need a query parameter (v2 batch 2).
+    for (const url of ['/v1/contacts?type=customer', '/v1/contacts?type=supplier', '/v1/exports/contacts.csv?type=customer', '/v1/exports/contacts.csv?type=supplier', '/v1/exports/prices.csv']) {
+      const res = await api(B.cookie, 'GET', url);
+      if (res.status !== 200) leaks.push(`${res.status}: ${url}`);
+      for (const m of [...markers, ...Object.values(ids), A.tenantId]) if (res.text.includes(m)) leaks.push(`${m} in ${url}`);
     }
     for (const rep of ['inventory-summary', 'low-stock', 'stock-movements', 'purchasing', 'sales', 'sync-health']) {
       const res = await api(B.cookie, 'GET', `/v1/reports/${rep}?format=csv`);

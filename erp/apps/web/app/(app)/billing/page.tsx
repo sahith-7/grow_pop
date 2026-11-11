@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { fieldError } from '../../../lib/stock-api';
-import { ApiError, api, errorText, SCHEME, type BillingSettings, type Series } from '../../../lib/sales-api';
+import { ApiError, api, BILL_FORMATS, errorText, SCHEME, type BillingSettings, type Series } from '../../../lib/sales-api';
+import { useCan } from '../../../lib/me';
+import { useOutletInView } from '../../../lib/outlet-scope';
 
 // Billing & GST (B5): how this store bills. The seller's legal name, GSTIN and address live in Settings (Phase 1) and are
 // shown here read-only; every invoice copies them at the moment it is issued.
@@ -17,6 +19,8 @@ const PCT: [keyof Form, string, string][] = [
 
 export default function BillingPage() {
   const [s, setS] = useState<BillingSettings | null>(null);
+  const inView = useOutletInView();
+  const canOutlets = useCan('account.manage');
   const [f, setF] = useState<Form | null>(null);
   const [series, setSeries] = useState<{ currentFinancialYear: string; items: Series[]; defaults: { invoice: string; creditNote: string } } | null>(null);
   const [error, setError] = useState('');
@@ -52,6 +56,13 @@ export default function BillingPage() {
     <div className="ui-content">
       <div className="ui-page-header"><div><h1 className="ui-h1">Billing &amp; GST</h1><div className="ui-caption">How this store’s invoices are worked out and numbered.</div></div></div>
 
+      {inView && !inView.isMain && (
+        // v2 (D115): this page is store-wide; an outlet's own address, GST state and bill numbers are on its outlet page.
+        <div className="ui-alert ui-alert--info" role="note"><div className="ui-alert-body">
+          These rules apply to every outlet, and the seller below is the main outlet. {inView.name}’s own address, GST state and bill numbers are on its outlet page.
+          {canOutlets && <> <Link href={`/account/outlets/${inView.id}`}>Open {inView.name}</Link></>}
+        </div></div>
+      )}
       {!s.ready && (
         <div className="ui-alert ui-alert--warning" role="alert"><div className="ui-alert-body">
           <strong>The counter cannot bill yet.</strong>
@@ -119,8 +130,50 @@ export default function BillingPage() {
               ))}
             </div>
 
+            <label className="ui-check"><input type="checkbox" checked={f.requireCustomer} onChange={(e) => set('requireCustomer', e.target.checked)} /> Every counter bill needs the customer’s name and mobile number, or Walk-in</label>
+            <span className="ui-help" style={{ marginTop: 'calc(-1 * var(--space-3))' }}>Made-up numbers (9999999999, 1234567890) and the shop’s own number are refused. A customer who won’t give a number is billed as Walk-in, so you can see how often that happens.</span>
+
+            <fieldset style={{ border: 0, margin: 0, padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
+              <legend className="ui-h3" style={{ marginBottom: 'var(--space-2)' }}>Cash at the counter</legend>
+              <label className="ui-check"><input type="checkbox" checked={f.requireRegister} onChange={(e) => set('requireRegister', e.target.checked)} /> Open the register (count the drawer) before the first bill at a till</label>
+              <span className="ui-help" style={{ marginTop: 'calc(-1 * var(--space-2))' }}>Every sale, refund and expense at the till is then added to its drawer, and closing shows if the cash is short or over. Turn this off only if you don’t count the cash.</span>
+              <div style={{ display: 'grid', gap: 'var(--space-3)', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                {([['expenseLimitEach', 'Expense limit, one entry', 'A cashier’s till expense above this waits for an owner or manager.'],
+                  ['expenseLimitDay', 'Expense limit, per day', 'A cashier’s expenses in one day above this wait too.']] as const).map(([k, label, help]) => (
+                  <label className="ui-field" key={k}><span className="ui-label">{label}</span>
+                    <input className="ui-input ui-input--num" inputMode="decimal" value={f[k]} onChange={(e) => set(k, e.target.value)} aria-invalid={!!fieldError(errors, k)} />
+                    <span className="ui-help">{help}</span>
+                    {fieldError(errors, k) && <span className="ui-error">{fieldError(errors, k)}</span>}</label>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset style={{ border: 0, margin: 0, padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
+              <legend className="ui-h3" style={{ marginBottom: 'var(--space-2)' }}>Returns and exchanges</legend>
+              <label className="ui-field" style={{ maxWidth: 280 }}><span className="ui-label">Take items back within (days of the bill)</span>
+                <input className="ui-input ui-input--num" inputMode="numeric" placeholder="No limit" value={f.returnDays === null ? '' : String(f.returnDays)}
+                  onChange={(e) => { const v = e.target.value.replace(/\D/g, ''); set('returnDays', v === '' ? null : Number(v)); }} aria-invalid={!!fieldError(errors, 'returnDays')} />
+                {fieldError(errors, 'returnDays') && <span className="ui-error">{fieldError(errors, 'returnDays')}</span>}</label>
+              <label className="ui-check"><input type="checkbox" checked={f.returnMoneyBack} onChange={(e) => set('returnMoneyBack', e.target.checked)} /> Give money back on returns (off: exchange only)</label>
+              <span className="ui-help" style={{ marginTop: 'calc(-1 * var(--space-2))' }}>Categories that can’t be returned (innerwear, cosmetics) are marked on <Link href="/products/categories">Categories &amp; brands</Link>. These rules hold for cashiers and managers; the owner can still take an item back. Voiding a wrong bill isn’t a return and isn’t affected.</span>
+            </fieldset>
+
             <label className="ui-check"><input type="checkbox" checked={f.invoiceWebOrders} onChange={(e) => set('invoiceWebOrders', e.target.checked)} /> Issue GST invoices for WooCommerce orders when they are completed</label>
             <span className="ui-help" style={{ marginTop: 'calc(-1 * var(--space-3))' }}>Turn this off only if a WooCommerce plugin already makes your web invoices; two invoices for one sale is a GST error.</span>
+
+            <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
+              <legend className="ui-label" style={{ marginBottom: 'var(--space-2)' }}>Bill format</legend>
+              <div style={{ display: 'grid', gap: 'var(--space-2)', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+                {BILL_FORMATS.map((b) => (
+                  <label key={b.value} className="ui-check" style={{ alignItems: 'flex-start', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: 'var(--space-2) var(--space-3)',
+                    background: f.billFormat === b.value ? 'var(--brand-ink-soft)' : undefined }}>
+                    <input type="radio" name="billFormat" value={b.value} checked={f.billFormat === b.value} onChange={() => set('billFormat', b.value)} style={{ marginTop: 3 }} />
+                    <span><b>{b.label}</b><br /><span className="ui-help">{b.help}</span></span>
+                  </label>
+                ))}
+              </div>
+              <span className="ui-help">What the counter prints after each sale and what invoice pages open with. Any bill can still be printed on the other papers.</span>
+            </fieldset>
 
             <label className="ui-field"><span className="ui-label">Receipt footer</span>
               <textarea className="ui-textarea" maxLength={300} value={f.receiptFooter ?? ''} onChange={(e) => set('receiptFooter', e.target.value)} placeholder="e.g. Exchange within 7 days with the bill." /></label>

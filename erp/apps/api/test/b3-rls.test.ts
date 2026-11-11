@@ -31,13 +31,13 @@ describe('B3 tenant isolation and grants', () => {
   });
 
   // The full reviewed list (04-tenancy-and-permissions.md §1.3). B3 added none; B4 added the two woo_* lookups;
-  // B7 added the store lifecycle and platform console functions (D70). A new one needs a decision record first.
+  // B7 added the store lifecycle and platform console functions (D70). v2 added the console's outlet limit pair (D101). A new one needs a decision record first.
   it('only the reviewed SECURITY DEFINER functions exist', async () => {
     const { rows } = await owner.query(
       `SELECT proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.prosecdef ORDER BY 1`);
     expect(rows.map((r) => r.proname)).toEqual(['auth_session_lookup', 'auth_token_lookup', 'auth_user_by_email', 'claim_jobs',
-      'platform_audit_log', 'platform_login_lookup', 'platform_login_result', 'platform_logout', 'platform_record_payment', 'platform_set_plan',
-      'platform_set_state', 'platform_set_trial', 'platform_support_view', 'platform_tenant', 'platform_tenants', 'platform_whoami',
+      'platform_audit_log', 'platform_login_lookup', 'platform_login_result', 'platform_logout', 'platform_record_payment', 'platform_set_outlets', 'platform_set_plan',
+      'platform_set_state', 'platform_set_trial', 'platform_support_view', 'platform_tenant', 'platform_tenant_outlets', 'platform_tenants', 'platform_whoami',
       'saas_expired_export_tenants', 'saas_lifecycle_tick', 'saas_live_tenants', 'saas_on_tenant_insert', 'woo_due_tenants', 'woo_endpoint_lookup']);
   });
 });

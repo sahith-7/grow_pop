@@ -1,3 +1,4 @@
+import type { Scope } from '../outlets/scope.js';
 import type { Tx } from '../../db.js';
 import { fmtMoney } from '../../lib/decimal.js';
 import { appError } from '../../lib/phase1.js';
@@ -28,6 +29,23 @@ export interface Move {
 export interface Posted { id: string; variantId: string; locationId: string; bucket: Bucket; delta: bigint; before: bigint; after: bigint }
 
 const keyOf = (v: string, l: string) => `${v}|${l}`;
+
+/**
+ * Lock balance rows ahead of several post() calls in one transaction (an exchange: stock out for the new bill, back in for
+ * the old one), in post()'s own order, so the transaction holds every stock row before it takes any bill number.
+ */
+export async function lockBalances(tx: Tx, pairs: [string, string][]) {
+  const keys = [...new Map(pairs.map(([v, l]) => [keyOf(v, l), [v, l] as const])).values()];
+  if (!keys.length) return;
+  const vs = keys.map((k) => k[0]), ls = keys.map((k) => k[1]);
+  await tx.query(
+    `INSERT INTO stock_balances (tenant_id, variant_id, location_id)
+     SELECT current_setting('app.tenant_id')::uuid, k.v, k.l FROM unnest($1::uuid[], $2::uuid[]) AS k(v, l) ORDER BY k.v, k.l
+     ON CONFLICT DO NOTHING`, [vs, ls]);
+  await tx.query(
+    `SELECT 1 FROM stock_balances b WHERE (b.variant_id, b.location_id) IN (SELECT * FROM unnest($1::uuid[], $2::uuid[]))
+      ORDER BY b.variant_id, b.location_id FOR UPDATE OF b`, [vs, ls]);
+}
 
 /**
  * Write ledger rows and their balance changes in the caller's transaction (INV-03/10).
@@ -190,19 +208,21 @@ export async function movementsByIds(tx: Tx, ids: string[], showCost: boolean) {
 }
 
 export async function listMovements(tx: Tx, f: {
-  variantId?: string; locationId?: string; movementType?: string; sourceId?: string; from?: string; to?: string;
-  limit: number; afterSeq: number | null;
+  variantId?: string; productId?: string; locationId?: string; movementType?: string; sourceId?: string; from?: string; to?: string;
+  limit: number; afterSeq: number | null; scope?: Scope;
 }, showCost: boolean) {
   const where: string[] = [];
   const params: unknown[] = [];
   const add = (sql: string, v: unknown) => { params.push(v); where.push(sql.replace('?', `$${params.length}`)); };
   if (f.variantId) add('m.variant_id = ?', f.variantId);
+  if (f.productId) add('m.variant_id IN (SELECT id FROM product_variants WHERE product_id = ?)', f.productId);
   if (f.locationId) add('m.location_id = ?', f.locationId);
   if (f.movementType) add('m.movement_type = ?', f.movementType);
   if (f.sourceId) add('m.source_id = ?', f.sourceId);
   if (f.from) add('m.posted_at >= ?', f.from);
   if (f.to) add('m.posted_at < ?', f.to);
   if (f.afterSeq !== null) add('m.seq < ?', f.afterSeq);
+  if (f.scope?.locs) add('m.location_id = ANY(?::uuid[])', f.scope.locs);
   params.push(f.limit + 1);
   const { rows } = await tx.query(
     `${MOVEMENT_SQL} ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY m.seq DESC LIMIT $${params.length}`, params);

@@ -4,12 +4,15 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { Ref } from '../../../lib/catalog-api';
+import { useMe } from '../../../lib/me';
+import { metaInView } from '../../../lib/outlet-scope';
 import { ApiError, api, dateTime, errorText, fieldError, type Stocktake, STOCKTAKE_STATUS, type StockMeta } from '../../../lib/stock-api';
 
 type Row = Pick<Stocktake, 'id' | 'number' | 'status' | 'locationName' | 'snapshotAt' | 'blind' | 'progress'>;
 
 export default function StocktakesPage() {
   const router = useRouter();
+  const view = useMe().outlets;
   const [meta, setMeta] = useState<StockMeta | null>(null);
   const [categories, setCategories] = useState<Ref[]>([]);
   const [status, setStatus] = useState('');
@@ -25,7 +28,7 @@ export default function StocktakesPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api<StockMeta>('/stock/meta').then(({ data }) => { setMeta(data); setLocationId(data.locations.find((l) => l.active)?.id ?? ''); }).catch((e) => setError(errorText(e)));
+    api<StockMeta>('/stock/meta').then(({ data: all }) => { const data = metaInView(view, all); setMeta(data); setLocationId(data.locations.find((l) => l.active)?.id ?? ''); }).catch((e) => setError(errorText(e)));
     api<{ items: Ref[] }>('/categories').then((r) => setCategories(r.data.items.filter((c) => !c.archivedAt))).catch(() => {});
   }, []);
 

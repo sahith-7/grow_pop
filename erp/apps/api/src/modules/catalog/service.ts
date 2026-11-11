@@ -1,12 +1,13 @@
 import type { Tx } from '../../db.js';
 import { audit } from '../../lib/phase1.js';
-import { ean13 } from '../../lib/barcode.js';
-import { fmtMoney } from '../../lib/decimal.js';
+import { barcodeProblem, ean13 } from '../../lib/barcode.js';
+import { fmtMoney, fmtQty } from '../../lib/decimal.js';
 import { appError } from '../../lib/phase1.js';
 import { mapUniqueViolation } from '../../lib/pg-errors.js';
 import { assertFile } from '../files/service.js';
 import * as repo from './repo.js';
 import type { ProductInput, ProductPatch, VariantInput, VariantPatch } from './schemas.js';
+import { LABEL_DEFAULTS, labelSettings, type LabelSettings } from './schemas.js';
 
 export interface Ctx { userId: string; showCost: boolean }
 
@@ -31,10 +32,10 @@ const attrKeySet = (a: Record<string, string>) => Object.keys(a).sort().join(','
 type RefTable = 'categories' | 'brands';
 
 export async function listRefs(tx: Tx, table: RefTable, includeArchived: boolean) {
-  const parent = table === 'categories' ? 'parent_id' : 'NULL::uuid AS parent_id';
+  const parent = table === 'categories' ? 'parent_id, no_returns' : 'NULL::uuid AS parent_id, false AS no_returns';
   const { rows } = await tx.query(
     `SELECT id, name, ${parent}, archived_at FROM ${table} ${includeArchived ? '' : 'WHERE archived_at IS NULL'} ORDER BY lower(name)`);
-  return rows.map((r) => ({ id: r.id, name: r.name, parentId: r.parent_id, archivedAt: r.archived_at }));
+  return rows.map((r) => ({ id: r.id, name: r.name, parentId: r.parent_id, archivedAt: r.archived_at, ...(table === 'categories' ? { noReturns: r.no_returns as boolean } : {}) }));
 }
 
 /** Categories are at most two levels deep (Department > Category) so filters and reports stay simple. */
@@ -51,18 +52,18 @@ async function checkParent(tx: Tx, id: string | null, parentId: string | null | 
 
 const dupName = () => appError(409, 'NAME_DUPLICATE', 'That name is already used');
 
-export async function createRef(tx: Tx, table: RefTable, input: { name: string; parentId?: string | null }) {
+export async function createRef(tx: Tx, table: RefTable, input: { name: string; parentId?: string | null; noReturns?: boolean }) {
   if (table === 'categories') await checkParent(tx, null, input.parentId);
-  const cols = table === 'categories' ? '(tenant_id, name, parent_id)' : '(tenant_id, name)';
-  const vals = table === 'categories' ? "(current_setting('app.tenant_id')::uuid, $1, $2)" : "(current_setting('app.tenant_id')::uuid, $1)";
-  const params = table === 'categories' ? [input.name, input.parentId ?? null] : [input.name];
+  const cols = table === 'categories' ? '(tenant_id, name, parent_id, no_returns)' : '(tenant_id, name)';
+  const vals = table === 'categories' ? "(current_setting('app.tenant_id')::uuid, $1, $2, $3)" : "(current_setting('app.tenant_id')::uuid, $1)";
+  const params = table === 'categories' ? [input.name, input.parentId ?? null, input.noReturns ?? false] : [input.name];
   try {
     const { rows } = await tx.query(`INSERT INTO ${table} ${cols} VALUES ${vals} RETURNING id`, params);
     return (await listRefs(tx, table, true)).find((r) => r.id === rows[0].id)!;
   } catch (e) { mapUniqueViolation(e, { categories_name_uq: dupName, brands_name_uq: dupName }); }
 }
 
-export async function patchRef(tx: Tx, table: RefTable, id: string, input: { name: string; parentId?: string | null; archived?: boolean }) {
+export async function patchRef(tx: Tx, table: RefTable, id: string, input: { name: string; parentId?: string | null; archived?: boolean; noReturns?: boolean }) {
   if (table === 'categories' && input.parentId !== undefined) {
     if (input.parentId === id) throw invalid({ parentId: ['A category cannot be its own parent'] });
     await checkParent(tx, id, input.parentId);
@@ -71,11 +72,38 @@ export async function patchRef(tx: Tx, table: RefTable, id: string, input: { nam
   const params: unknown[] = [id, input.name];
   if (table === 'categories' && input.parentId !== undefined) { params.push(input.parentId); sets.push(`parent_id = $${params.length}`); }
   if (input.archived !== undefined) sets.push(input.archived ? 'archived_at = coalesce(archived_at, now())' : 'archived_at = NULL');
+  if (table === 'categories' && input.noReturns !== undefined) { params.push(input.noReturns); sets.push(`no_returns = $${params.length}`); }
   try {
     const { rowCount } = await tx.query(`UPDATE ${table} SET ${sets.join(', ')} WHERE id = $1`, params);
     if (!rowCount) throw notFound(table === 'categories' ? 'Category' : 'Brand');
   } catch (e) { mapUniqueViolation(e, { categories_name_uq: dupName, brands_name_uq: dupName }); }
   return (await listRefs(tx, table, true)).find((r) => r.id === id)!;
+}
+
+/**
+ * v2 (D89): delete a category or brand, only while nothing uses it. A category's link to a shop category is removed with it;
+ * the category in WooCommerce itself stays. Anything still in use gets 409 IN_USE with the count, so the screen can say why.
+ */
+export async function deleteRef(tx: Tx, table: RefTable, id: string, actorId: string) {
+  const what = table === 'categories' ? 'Category' : 'Brand';
+  const { rows: [ref] } = await tx.query(`SELECT id, name FROM ${table} WHERE id = $1 FOR UPDATE`, [id]);
+  if (!ref) throw notFound(what);
+  const col = table === 'categories' ? 'category_id' : 'brand_id';
+  const { rows: [used] } = await tx.query(`SELECT count(*)::int AS n FROM products WHERE ${col} = $1`, [id]);
+  if (used.n) throw appError(409, 'IN_USE', `${used.n} product${used.n === 1 ? ' uses' : 's use'} this ${what.toLowerCase()} (archived ones count too). Move them to another ${what.toLowerCase()} first, or archive it instead.`, { products: [String(used.n)] });
+  if (table === 'categories') {
+    const { rows: [kids] } = await tx.query('SELECT count(*)::int AS n FROM categories WHERE parent_id = $1', [id]);
+    if (kids.n) throw appError(409, 'IN_USE', `This category has ${kids.n} sub-categor${kids.n === 1 ? 'y' : 'ies'}. Delete or move them first.`);
+    await tx.query('DELETE FROM woo_category_map WHERE category_id = $1', [id]);
+  }
+  try {
+    await tx.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+  } catch (e) {
+    // A product saved with this category between the count and the delete.
+    if ((e as { code?: string }).code === '23503') throw appError(409, 'IN_USE', `A product started using this ${what.toLowerCase()} just now. Reload and try again.`);
+    throw e;
+  }
+  await audit(tx, { actorId, action: `${table === 'categories' ? 'category' : 'brand'}.delete`, entityType: table === 'categories' ? 'category' : 'brand', entityId: id, summary: { name: ref.name } });
 }
 
 export async function listUnits(tx: Tx) {
@@ -127,7 +155,16 @@ function variantValues(v: VariantInput) {
   return {
     sku: v.sku, barcode: v.barcode ?? null, attributes: cleanAttributes(v.attributes), price: v.price, mrp: v.mrp ?? null,
     cost: v.cost ?? null, weightG: v.weightG ?? null, dims: v.dimensionsMm ?? null, reorderLevel: v.reorderLevel ?? null,
+    netWeight: v.netWeight ?? null, netWeightUnit: v.netWeightUnit ?? null,
   };
+}
+
+/** Net weight and its unit go together (D88). */
+function checkNetWeight(v: { netWeight?: string | null; netWeightUnit?: string | null }, field: string, errors: Record<string, string[]>) {
+  const has = v.netWeight != null && Number(v.netWeight) > 0;
+  if (v.netWeight != null && Number(v.netWeight) <= 0) errors[`${field}netWeight`] = ['Enter a net weight above zero, or leave it empty'];
+  else if (has && !v.netWeightUnit) errors[`${field}netWeightUnit`] = ['Choose g, kg, ml or l'];
+  else if (!has && v.netWeightUnit) errors[`${field}netWeight`] = ['Enter the net weight for this unit'];
 }
 
 function checkMrp(v: { price?: string; mrp?: string | null }, field: string, errors: Record<string, string[]>) {
@@ -175,10 +212,17 @@ export async function createProduct(tx: Tx, ctx: Ctx, input: ProductInput) {
     if (input.type === 'variable' && seenAttrs.has(a)) errors[`variants.${i}.attributes`] = ['Same attributes as another variant'];
     seenAttrs.set(a, i);
     checkMrp(v, `variants.${i}.price`, errors);
+    checkNetWeight(v, `variants.${i}.`, errors);
   });
   if (Object.keys(errors).length) throw invalid(errors);
   await checkRefs(tx, input);
   await checkCodesFree(tx, values, 'variants');
+  // v2 (D88): every new product gets a barcode. Variants left empty continue the store's own code series.
+  const missing = values.filter((v) => !v.barcode);
+  if (missing.length) {
+    const codes = await nextBarcodes(tx, missing.length);
+    missing.forEach((v, i) => { v.barcode = codes[i]; });
+  }
 
   const { rows } = await tx.query(
     `INSERT INTO products (tenant_id, name, description, category_id, brand_id, unit_code, type, status, hsn_code, gst_rate, publish_to_web, created_by)
@@ -250,12 +294,14 @@ export async function addVariant(tx: Tx, ctx: Ctx, productId: string, input: Var
   const v = variantValues(input);
   const errors: Record<string, string[]> = {};
   checkMrp(v, 'price', errors);
+  checkNetWeight(v, '', errors);
   const existing = (await repo.variantsOf(tx, productId)).filter((x) => x.status === 'active');
   if (existing.length && attrKeySet(existing[0].attributes) !== attrKeySet(v.attributes))
     errors.attributes = [`Use the same attributes as the other variants (${Object.keys(existing[0].attributes).join(', ')})`];
   if (!Object.keys(v.attributes).length) errors.attributes = ['A variant needs at least one attribute'];
   if (Object.keys(errors).length) throw invalid(errors);
   await checkCodesFree(tx, [v], '');
+  if (!v.barcode) [v.barcode] = await nextBarcodes(tx, 1);   // D88: every variant has a barcode
   let row: repo.VariantRow;
   try { row = await repo.insertVariant(tx, productId, v); } catch (e) { mapUniqueViolation(e, UNIQUE_ERRORS); }
   await audit(tx, { actorId: ctx.userId, action: 'variant.create', entityType: 'product', entityId: productId,
@@ -263,9 +309,10 @@ export async function addVariant(tx: Tx, ctx: Ctx, productId: string, input: Var
   return repo.variantOut(row, ctx.showCost);
 }
 
-const VARIANT_FIELDS = ['sku', 'barcode', 'price', 'mrp', 'cost', 'weightG', 'reorderLevel'] as const;
+const VARIANT_FIELDS = ['sku', 'barcode', 'price', 'mrp', 'cost', 'weightG', 'reorderLevel', 'netWeight', 'netWeightUnit'] as const;
 const VARIANT_COLS: Record<(typeof VARIANT_FIELDS)[number], keyof repo.VariantRow> = {
   sku: 'sku', barcode: 'barcode', price: 'price', mrp: 'mrp', cost: 'cost', weightG: 'weight_g', reorderLevel: 'reorder_level',
+  netWeight: 'net_weight', netWeightUnit: 'net_weight_unit',
 };
 const sameNumber = (a: string | null, b: string | null | undefined) => (a === null || b == null ? a === (b ?? null) : Number(a) === Number(b));
 
@@ -283,6 +330,8 @@ export async function patchVariant(tx: Tx, ctx: Ctx, id: string, version: number
   if (product.status === 'archived' || v.status === 'archived') throw appError(409, 'INVALID_STATE', 'Restore this product before editing it');
   const errors: Record<string, string[]> = {};
   checkMrp({ price: patch.price ?? v.price, mrp: patch.mrp === undefined ? v.mrp : patch.mrp }, 'price', errors);
+  checkNetWeight({ netWeight: patch.netWeight === undefined ? v.net_weight : patch.netWeight,
+    netWeightUnit: patch.netWeightUnit === undefined ? v.net_weight_unit : patch.netWeightUnit }, '', errors);
   let attrs: Record<string, string> | undefined;
   if (patch.attributes !== undefined) {
     attrs = cleanAttributes(patch.attributes);
@@ -300,7 +349,7 @@ export async function patchVariant(tx: Tx, ctx: Ctx, id: string, version: number
     if (patch[f] === undefined) continue;
     const before = v[VARIANT_COLS[f]] as string | number | null;
     const after = patch[f] ?? null;
-    const same = ['price', 'mrp', 'cost', 'reorderLevel'].includes(f) ? sameNumber(before as string | null, after as string | null) : before === after;
+    const same = ['price', 'mrp', 'cost', 'reorderLevel', 'netWeight'].includes(f) ? sameNumber(before as string | null, after as string | null) : before === after;
     if (same) continue;
     changes[f] = f === 'cost' ? [fmtMoney(before as string | null), after] : [before, after];
     set(VARIANT_COLS[f], after);
@@ -347,6 +396,7 @@ export async function listProducts(tx: Tx, f: repo.ListFilter) {
       id: r.id, name: r.name, status: r.status, category: r.category, variantCount: r.variant_count, skus: r.skus ?? [],
       priceRange: r.min_price === null ? null : { min: fmtMoney(r.min_price), max: fmtMoney(r.max_price) },
       thumbnailUrl: repo.fileUrl(r.thumb), publishState: r.publish_state,
+      stock: { free: fmtQty(String(r.stock_free)), low: r.stock_low as boolean },
     })),
     last: more ? [page.at(-1)!.sort_name, page.at(-1)!.id] as [string, string] : null,
   };
@@ -457,13 +507,66 @@ export async function generateBarcodes(tx: Tx, count: number) {
   return out;
 }
 
+/**
+ * v2 (D88): the next codes in the store's own series. The series is the most recent barcode the store made itself:
+ * scanned manufacturer codes (numeric GS1 lengths outside the 2xx in-store range) never count. "AC1203" continues as
+ * AC1204, AC1205 (keeping leading zeros); an in-store EAN-13 or no codes at all continue the EAN-13 sequence.
+ * Serialised per store with a transaction lock, so two people creating products at once never get the same code.
+ */
+export async function nextBarcodes(tx: Tx, count: number): Promise<string[]> {
+  await tx.query("SELECT pg_advisory_xact_lock(hashtext('barcode-series:' || current_setting('app.tenant_id')))");
+  const { rows: [last] } = await tx.query(
+    `SELECT barcode FROM product_variants
+      WHERE barcode IS NOT NULL AND NOT (barcode ~ '^[0-9]+$' AND length(barcode) IN (8, 12, 13, 14) AND barcode !~ '^2')
+      ORDER BY created_at DESC, id DESC LIMIT 1`);
+  const m = last ? /^(.*?)(\d+)$/.exec(last.barcode as string) : null;
+  const gs1 = last && /^\d+$/.test(last.barcode) && [8, 12, 13, 14].includes(last.barcode.length);
+  if (!m || gs1) return generateBarcodes(tx, count);
+  const [, prefix, digits] = m;
+  let n = BigInt(digits);
+  const out: string[] = [];
+  while (out.length < count) {
+    const batch: string[] = [];
+    for (let i = 0; i < (count - out.length) + 5; i++) {
+      n += 1n;
+      const code = prefix + n.toString().padStart(digits.length, '0');
+      if (code.length > 64) throw appError(409, 'BARCODE_RANGE_EXHAUSTED', 'This barcode series is full; type a new starting code');
+      if (!barcodeProblem(code)) batch.push(code);
+    }
+    const used = await tx.query('SELECT barcode FROM product_variants WHERE barcode = ANY($1)', [batch]);
+    const taken = new Set(used.rows.map((r) => r.barcode));
+    out.push(...batch.filter((c) => !taken.has(c)).slice(0, count - out.length));
+  }
+  return out;
+}
+
 /** Label data; the browser draws the barcode (EAN-13 when valid, otherwise Code 128 of the barcode or SKU). */
+/** Whole products (all their active variants, one copy each) or a goods receipt (a copy per unit accepted). */
+export async function labelItems(tx: Tx, input: { items?: { variantId: string; copies: number }[]; productIds?: string[]; receiptId?: string }) {
+  if (input.items) return input.items;
+  if (input.productIds) {
+    const { rows } = await tx.query(
+      `SELECT v.id FROM product_variants v JOIN products p ON p.id = v.product_id
+        WHERE p.id = ANY($1::uuid[]) AND v.status = 'active' ORDER BY lower(p.name), p.id, v.position, v.id LIMIT 2001`, [input.productIds]);
+    if (rows.length > 2000) throw invalid({ productIds: ['These products have more than 2000 variants. Pick fewer.'] });
+    return rows.map((r) => ({ variantId: r.id as string, copies: 1 }));
+  }
+  const { rows: [g] } = await tx.query('SELECT id FROM goods_receipts WHERE id = $1', [input.receiptId]);
+  if (!g) throw appError(404, 'NOT_FOUND', 'Goods receipt not found');
+  // Loose items (kg, litres) get one label per line; counted items one per unit, at most 200 per line.
+  const { rows } = await tx.query(
+    `SELECT l.variant_id, sum(l.accepted_qty) AS qty, bool_or(u.allow_fraction) AS loose
+       FROM goods_receipt_lines l JOIN product_variants v ON v.id = l.variant_id JOIN products p ON p.id = v.product_id JOIN units u ON u.code = p.unit_code
+      WHERE l.receipt_id = $1 AND l.accepted_qty > 0 GROUP BY l.variant_id ORDER BY min(l.id::text)`, [input.receiptId]);
+  return rows.map((r) => ({ variantId: r.variant_id as string, copies: r.loose ? 1 : Math.min(200, Math.max(1, Math.ceil(Number(r.qty)))) }));
+}
+
 export async function labels(tx: Tx, items: { variantId: string; copies: number }[]) {
   const total = items.reduce((n, i) => n + i.copies, 0);
   if (total > 2000) throw invalid({ items: ['Print at most 2000 labels at a time'] });
   const { rows } = await tx.query(
-    `SELECT v.id, v.sku, v.barcode, v.attributes, v.price, v.mrp, p.name
-       FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = ANY($1)`, [items.map((i) => i.variantId)]);
+    `SELECT v.id, v.sku, v.barcode, v.attributes, v.price, v.mrp, v.net_weight, v.net_weight_unit, p.name, b.name AS brand
+       FROM product_variants v JOIN products p ON p.id = v.product_id LEFT JOIN brands b ON b.id = p.brand_id WHERE v.id = ANY($1)`, [items.map((i) => i.variantId)]);
   const byId = new Map(rows.map((r) => [r.id, r]));
   const missing = items.findIndex((i) => !byId.has(i.variantId));
   if (missing >= 0) throw invalid({ [`items.${missing}.variantId`]: ['Variant not found'] });
@@ -473,6 +576,8 @@ export async function labels(tx: Tx, items: { variantId: string; copies: number 
     return {
       variantId: r.id, copies: i.copies, code: r.barcode ?? r.sku, codeSource: r.barcode ? 'barcode' : 'sku',
       sku: r.sku, name: attrs ? `${r.name} · ${attrs}` : r.name, price: fmtMoney(r.price), mrp: fmtMoney(r.mrp),
+      productName: r.name as string, variant: attrs || null, brand: (r.brand as string | null) ?? null,
+      netWeight: r.net_weight === null ? null : `${fmtQty(r.net_weight)} ${r.net_weight_unit}`,
     };
   });
 }
@@ -543,19 +648,52 @@ export async function importRefs(tx: Tx, skus: string[], barcodes: string[]) {
 }
 
 /** Every variant with its product fields, for CSV export. */
-export async function exportRows(tx: Tx) {
+export interface ExportFilter {
+  status?: 'active' | 'draft'; categoryId?: string; brandId?: string; q?: string; productIds?: string[];
+}
+
+/** Rows for the product CSV export. With no filter: every active variant of every product that is not archived. */
+export async function exportRows(tx: Tx, f: ExportFilter = {}) {
+  const params: unknown[] = [];
+  const where = ["v.status = 'active'", "p.status <> 'archived'"];
+  const p = (v: unknown) => { params.push(v); return `$${params.length}`; };
+  if (f.status) where.push(`p.status = ${p(f.status)}`);
+  if (f.categoryId) where.push(`(p.category_id = ${p(f.categoryId)} OR p.category_id IN (SELECT id FROM categories WHERE parent_id = $${params.length}))`);
+  if (f.brandId) where.push(`p.brand_id = ${p(f.brandId)}`);
+  if (f.q) where.push(`(p.name ILIKE '%' || ${p(f.q.replace(/[%_\\]/g, '\\$&'))} || '%' OR v.sku ILIKE '%' || $${params.length} || '%' OR v.barcode = $${params.length})`);
+  if (f.productIds) where.push(`p.id = ANY(${p(f.productIds)}::uuid[])`);
   const { rows } = await tx.query(
     `SELECT p.name AS product_name, v.sku, v.price, v.mrp, v.cost, v.barcode,
             CASE WHEN pc.name IS NOT NULL THEN pc.name || ' > ' || c.name ELSE c.name END AS category,
             b.name AS brand, u.abbr AS unit, p.hsn_code, p.gst_rate, v.attributes, v.reorder_level, v.weight_g,
-            p.status, p.description
+            p.status, p.description, v.net_weight, v.net_weight_unit,
+            (SELECT coalesce(sum(sb.on_hand), 0) FROM stock_balances sb WHERE sb.variant_id = v.id) AS stock_on_hand
        FROM product_variants v
        JOIN products p ON p.id = v.product_id
        JOIN units u ON u.code = p.unit_code
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN categories pc ON pc.id = c.parent_id
        LEFT JOIN brands b ON b.id = p.brand_id
-      WHERE v.status = 'active' AND p.status <> 'archived'
-      ORDER BY lower(p.name), p.id, v.position`);
+      WHERE ${where.join(' AND ')}
+      ORDER BY lower(p.name), p.id, v.position`, params);
   return rows;
+}
+
+// ------------------------------------------------------------------ label defaults (v2, D98)
+
+/** Saved label defaults merged over the built-in ones, so a store that never saved any still gets a full shape. */
+export async function labelSettingsOf(tx: Tx): Promise<LabelSettings> {
+  const { rows: [r] } = await tx.query('SELECT label_settings FROM sales_settings');
+  const saved = (r?.label_settings ?? {}) as Partial<LabelSettings>;
+  const merged = { ...LABEL_DEFAULTS, ...saved, show: { ...LABEL_DEFAULTS.show, ...(saved.show ?? {}) } };
+  const ok = labelSettings.safeParse(merged);
+  return ok.success ? ok.data : LABEL_DEFAULTS;
+}
+
+export async function saveLabelSettings(tx: Tx, ctx: { userId: string }, input: LabelSettings) {
+  await tx.query(`INSERT INTO sales_settings (tenant_id) VALUES (current_setting('app.tenant_id')::uuid) ON CONFLICT DO NOTHING`);
+  await tx.query('UPDATE sales_settings SET label_settings = $1, updated_at = now()', [JSON.stringify(input)]);
+  await audit(tx, { actorId: ctx.userId, action: 'labels.settings_changed', entityType: 'sales_settings',
+    summary: { layout: input.layout, design: input.design, customLayouts: input.custom.length } });
+  return input;
 }

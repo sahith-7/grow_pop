@@ -1,3 +1,4 @@
+import { locIn, pusher, type Scope } from '../outlets/scope.js';
 import type { Tx } from '../../db.js';
 import { nextNumber } from '../../lib/doc-numbers.js';
 import { appError, audit } from '../../lib/phase1.js';
@@ -25,7 +26,7 @@ function requireStatus(h: { status: string; number: string }, ...allowed: string
 }
 
 export async function createStocktake(tx: Tx, ctx: Ctx, input: { locationId: string; categoryIds: string[]; blind: boolean; note?: string }) {
-  const location = await activeLocation(tx, input.locationId, 'locationId');
+  const location = await activeLocation(tx, input.locationId, 'locationId', ctx.userId);
   if (input.categoryIds.length) {
     const { rows } = await tx.query('SELECT id FROM categories WHERE id = ANY($1)', [input.categoryIds]);
     if (rows.length !== new Set(input.categoryIds).size) throw invalid({ categoryIds: ['Category not found'] });
@@ -112,10 +113,11 @@ export async function getStocktake(tx: Tx, ctx: Ctx, id: string) {
   };
 }
 
-export async function listStocktakes(tx: Tx, f: { status?: string; limit: number; after: [string, string] | null }) {
+export async function listStocktakes(tx: Tx, f: { status?: string; limit: number; after: [string, string] | null; scope?: Scope }) {
   const params: unknown[] = [f.status ?? null];
   let where = '($1::text IS NULL OR s.status = $1)';
   if (f.after) { params.push(f.after[0], f.after[1]); where += ` AND (s.snapshot_at, s.id) < ($2::timestamptz, $3::uuid)`; }
+  if (f.scope) where += ` AND ${locIn(f.scope, 's.location_id', pusher(params))}`;
   params.push(f.limit + 1);
   const { rows } = await tx.query(
     `SELECT s.id, s.number, s.status, s.snapshot_at, s.blind, l.name AS location_name,

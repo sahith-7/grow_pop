@@ -1,12 +1,16 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import { fmtDateTime } from '@/lib/datetime';
 import {
   api, contact, day, errorText, rupees, STATE_LABEL,
   type Export, type Grant, type Payment, type Plan, type StateEvent, type Subscription,
 } from '../../../lib/account-api';
+import { money } from '../../../lib/format';
+import { perMonth, type OutletList } from '../../../lib/outlets-api';
 
-// Account (B7), owner only: plan and state, how to pay, payments, a full data export, and support access.
+// Account (B7), owner only: outlets (v2, D101), plan and state, how to pay, payments, a full data export, and support access.
 
 const STATE_TEXT: Record<string, string> = {
   trial: 'free trial', active: 'active', past_due: 'payment due', suspended: 'read-only', closed: 'closed',
@@ -41,6 +45,51 @@ function PlanPanel({ s, plans, gstPercent }: { s: Subscription; plans: Plan[]; g
         </table></div>
         {gstPercent ? <p className="ui-caption" style={{ margin: 0 }}>Prices are before {gstPercent}% GST.</p> : null}
       </div>
+    </section>
+  );
+}
+
+/** Every outlet with today's bills; open one for its details. Extra outlets are a paid add-on switched on by GroPop. */
+function OutletsPanel({ closed }: { closed: boolean }) {
+  const [d, setD] = useState<OutletList | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => { api<OutletList>('/outlets').then((r) => setD(r.data)).catch((e) => setError(errorText(e))); }, []);
+  const l = d?.limit;
+  const full = !!l && l.open >= l.allowed;
+  return (
+    <section className="ui-panel" aria-labelledby="outlets-title">
+      <div className="ui-panel-head" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+        <h2 className="ui-h3" id="outlets-title" style={{ flex: 1, margin: 0 }}>Outlets</h2>
+        {l && <span className="ui-caption">{l.open} open · your plan allows {l.allowed}</span>}
+        {d?.can.manage && !closed && (full
+          ? <button className="ui-btn" type="button" disabled title="Your plan has no room for another outlet">Create outlet</button>
+          : <Link className="ui-btn ui-btn--primary" href="/account/outlets/new">Create outlet</Link>)}
+      </div>
+      {error && <div className="ui-panel-body"><Alert tone="danger">{error}</Alert></div>}
+      {!d ? <div className="ui-panel-body"><div className="ui-skeleton" style={{ height: 96 }} /></div> : (
+        <div className="ui-table-wrap"><table className="ui-table" data-collapse>
+          <thead><tr><th scope="col">Outlet</th><th scope="col">Address</th><th scope="col">GSTIN</th><th scope="col" className="ui-num">Bills today</th><th scope="col" className="ui-money">Sales today</th></tr></thead>
+          <tbody>{d.items.map((o) => (
+            <tr key={o.id}>
+              <td data-primary>
+                <Link className="ui-cell-title" href={`/account/outlets/${o.id}`}>{o.name}</Link>{' '}
+                {o.isMain && <span className="ui-badge">Main</span>}{!o.active && <span className="ui-badge ui-badge--danger">Closed</span>}
+                {o.active && !o.ready && <span className="ui-badge ui-badge--warning" title={o.problems.join(' ')}>Can’t bill yet</span>}
+                <div className="ui-cell-sub">{o.stockRooms} stock room{o.stockRooms === 1 ? '' : 's'}</div>
+              </td>
+              <td data-label="Address">{[o.address, o.city, o.stateName].filter(Boolean).join(', ') || <span className="ui-muted">Not set</span>}</td>
+              <td data-label="GSTIN" className="ui-code">{o.gstin ?? <span className="ui-muted">—</span>}</td>
+              <td data-label="Bills today" className="ui-num">{o.today.bills}</td>
+              <td data-label="Sales today" className="ui-money">{money(o.today.sales)}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      )}
+      {l && full && !closed && (
+        <div className="ui-panel-body">
+          <p className="ui-muted" style={{ margin: 0 }}>Your plan includes {l.included} outlet{l.extra ? ` plus ${l.extra} extra` : ''}. To open another, pay for an extra outlet{perMonth(l.pricePerOutletMonthPaise) ? ` (${perMonth(l.pricePerOutletMonthPaise)})` : ''} the same way as your plan, and tell us. We switch it on the same working day.</p>
+        </div>
+      )}
     </section>
   );
 }
@@ -146,7 +195,7 @@ function SupportPanel() {
         {error && <Alert tone="danger">{error}</Alert>}
         {active ? (
           <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className="ui-badge ui-badge--warning">Support can look until {new Date(active.expiresAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+            <span className="ui-badge ui-badge--warning">Support can look until {fmtDateTime(active.expiresAt)}</span>
             <button className="ui-btn ui-btn--danger" type="button" disabled={busy} onClick={() => act(() => api('/account/support-access/revoke', { method: 'POST' }))}>Stop access now</button>
           </div>
         ) : (
@@ -164,7 +213,7 @@ function SupportPanel() {
         {!!data?.views.length && (
           <div>
             <h3 className="ui-label" style={{ marginTop: 0 }}>Looks by support</h3>
-            <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>{data.views.map((v, i) => <li key={i}>{new Date(v.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} by {v.by}</li>)}</ul>
+            <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>{data.views.map((v, i) => <li key={i}>{fmtDateTime(v.at)} by {v.by}</li>)}</ul>
           </div>
         )}
       </div>
@@ -189,6 +238,7 @@ export default function AccountPage() {
       {error && <Alert tone="danger">{error}</Alert>}
       {!s ? <div className="ui-skeleton" style={{ height: 240 }} /> : (
         <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+          <OutletsPanel closed={s.state === 'closed'} />
           {s.state !== 'closed' && <PlanPanel s={s} plans={plans} gstPercent={gstPercent} />}
           {s.state !== 'closed' && <PayPanel s={s} />}
           <ExportPanel />

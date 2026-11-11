@@ -17,7 +17,7 @@ Design pack for the retail ERP, built on the PRD v1.0 (12 Oct 2026) and the depl
 
 1. **Keep Phase 1's stack over the PRD's NestJS/Prisma/JWT/BullMQ** (D2-r, D14, D15). Recommended yes. Needs a line in `docs/decisions.md`.
 2. **No Redis in V1; Postgres-backed queues** (D15). Recommended yes.
-3. **Brand, colours and fonts** (D1). Proposed: direction A "Ledger" and the name TRIDENT (chosen 2026-10-21, replacing the working name TRIDENT; trademark check pending). See [07-visual-language.md](07-visual-language.md). Not VasyERP's look: their palette was never available and copying it carries trade-dress risk.
+3. **Brand, colours and fonts** (D1, then D87 and D92). The product is **GroPop** (2026-11-08) and the v2 look replaced the "Ledger" palette: action blue #1769D2, navy #0B2447, Plus Jakarta Sans. See [07-visual-language.md](07-visual-language.md). Layout patterns follow common retail ERPs; no other product's logo, colours or wording is copied (trade-dress risk).
 4. **RPO/RTO** (D11): PRD planning target 24 h / 8 h; this pack recommends 5 min / 4 h using managed PITR.
 5. Still open from the PRD and not solvable by design: tax examples and invoice numbering signed by a tax adviser (D7), pilot Woo versions and gateways (D6), scanner/printer models (D9), historical order import window (D5).
 

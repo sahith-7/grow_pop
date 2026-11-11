@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { money } from '../../../lib/format';
+import { HitRow, searchHits, Suggestions, useSuggest, type SearchHit } from '../../../lib/suggest';
 import { dateTime } from '../../../lib/stock-api';
 import { api, errorText, type InvoiceSummary } from '../../../lib/sales-api';
 
@@ -14,6 +15,8 @@ function InvoicesPage() {
   const params = useSearchParams();
   const type = params.get('type') === 'credit_note' ? 'credit_note' : 'invoice';
   const [q, setQ] = useState(params.get('q') ?? '');
+  const sg = useSuggest<SearchHit>({ q, load: (t) => searchHits(t, ['invoice']) });
+  const openHit = (h: SearchHit) => router.push(h.href);
   const [from, setFrom] = useState(params.get('from') ?? '');
   const [to, setTo] = useState(params.get('to') ?? '');
   const [items, setItems] = useState<InvoiceSummary[] | null>(null);
@@ -55,7 +58,11 @@ function InvoicesPage() {
 
       <div className="ui-panel">
         <form className="ui-toolbar" role="search" onSubmit={(e) => { e.preventDefault(); apply({ q: q.trim(), from, to }); }}>
-          <input className="ui-input ui-search" placeholder="Number, customer name or phone" aria-label="Search" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="gp-suggest">
+            <input className="ui-input ui-search" placeholder="Number, customer name or phone" aria-label="Search invoices" value={q} onChange={(e) => setQ(e.target.value)}
+              {...sg.inputProps} onKeyDown={(e) => sg.onKeyDown(e, openHit)} />
+            <Suggestions s={sg} onPick={openHit} render={(h) => <HitRow hit={h} />} label="Matching invoices" />
+          </div>
           <label className="ui-caption">From <input className="ui-input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
           <label className="ui-caption">To <input className="ui-input" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
           <button className="ui-btn" type="submit">Search</button>

@@ -5,6 +5,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { money } from '../../../lib/format';
 import { api, errorText, ApiError, type ReportColumn, type ReportInfo, type ReportResult } from '../../../lib/fulfil-api';
 import type { Location } from '../../../lib/stock-api';
+import { useOutletInView, useRoomsInView } from '../../../lib/outlet-scope';
 
 // Reports (PRD 8, B6). The screen shows the first 500 rows with totals over all of them; the CSV has every row.
 
@@ -17,6 +18,8 @@ function ReportsPage() {
   const params = useSearchParams();
   const [list, setList] = useState<{ items: ReportInfo[]; can: { export: boolean; cost: boolean } } | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
+  const rooms = useRoomsInView(locations);   // v2 (D115)
+  const inView = useOutletInView();
   const [result, setResult] = useState<ReportResult | null>(null);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
@@ -81,7 +84,7 @@ function ReportsPage() {
           {info.location && (
             <label className="ui-field"><span className="ui-label">Location</span>
               <select className="ui-select" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-                <option value="">All locations</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                <option value="">{inView ? `All at ${inView.name}` : 'All locations'}</option>{rooms.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select></label>
           )}
           {(info.dated || info.location) && <button className="ui-btn ui-btn--primary" type="submit">Show</button>}
@@ -110,7 +113,7 @@ function ReportsPage() {
         {result && (
           <div className="ui-pager">
             <span>{result.truncated ? `Showing the first ${result.rows.length} of ${result.rowCount} rows; totals cover all of them.${list?.can.export ? ' Download the CSV for every row.' : ''}` : `${result.rowCount} row${result.rowCount === 1 ? '' : 's'}`}</span>
-            {result.from && <span className="ui-caption">{result.from} to {result.to}</span>}
+            {(result.from || result.outletName) && <span className="ui-caption">{[result.outletName, result.from && `${result.from} to ${result.to}`].filter(Boolean).join(' · ')}</span>}
           </div>
         )}
       </div>

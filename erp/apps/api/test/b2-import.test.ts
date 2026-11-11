@@ -107,7 +107,7 @@ describe('import flow', () => {
     const tee = (await api(T.cookie, 'GET', '/v1/products?q=tee')).body.items[0];
     expect(tee).toMatchObject({ name: 'Tee', variantCount: 2, category: 'Tees' });
     const cats = (await api(T.cookie, 'GET', '/v1/categories')).body.items.map((c: any) => c.name);
-    expect(cats).toEqual(['Apparel', 'Tees']);
+    expect(cats).toEqual(['Apparel', 'General', 'Tees']);   // General: the category the test helper gives "Existing" (D88)
     const audit = await owner.query("SELECT summary FROM audit_events WHERE tenant_id = $1 AND action = 'import.commit'", [T.tenantId]);
     expect(audit.rows[0].summary.products).toBe(1);
     expect((await api(T.cookie, 'POST', `/v1/imports/${start.body.id}/commit`)).status).toBe(409);

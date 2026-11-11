@@ -5,9 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ApiError, api, errorText, fieldError, idemKey, noEnterSubmit, type Picked, type PostedDocument, type StockMeta } from '../../../../lib/stock-api';
 import { ItemCell, ItemPicker } from '../_components/item-picker';
+import { QtyStepper } from '../../../../lib/qty';
+import { useMe } from '../../../../lib/me';
+import { metaInView } from '../../../../lib/outlet-scope';
 
 const REASONS = [
-  { code: 'correction', label: 'Correction (miscount, wrong entry)', perm: 'adjust' },
+  { code: 'correction', label: 'Correction (wrong count)', perm: 'adjust' },
   { code: 'opening', label: 'Opening stock', perm: 'adjust' },
   { code: 'damage', label: 'Damaged — write off', perm: 'writeoff' },
   { code: 'expiry', label: 'Expired — write off', perm: 'writeoff' },
@@ -18,6 +21,7 @@ interface Line { item: Picked; qty: string; bucket: 'sellable' | 'non_sellable';
 
 export default function AdjustPage() {
   const router = useRouter();
+  const view = useMe().outlets;
   const [meta, setMeta] = useState<StockMeta | null>(null);
   const [locationId, setLocationId] = useState('');
   const [reason, setReason] = useState<string>('');
@@ -31,7 +35,9 @@ export default function AdjustPage() {
   const [key, setKey] = useState(idemKey);
 
   useEffect(() => {
-    api<StockMeta>('/stock/meta').then(({ data }) => {
+    // v2 (D115): only the stock rooms at the outlet in view.
+    api<StockMeta>('/stock/meta').then(({ data: all }) => {
+      const data = metaInView(view, all);
       setMeta(data);
       setLocationId(data.locations.find((l) => l.active)?.id ?? '');
       setReason(REASONS.find((r) => data.can[r.perm])?.code ?? '');
@@ -119,8 +125,7 @@ export default function AdjustPage() {
                   </select>
                 </td>
                 <td className="ui-num">
-                  <input className="ui-input ui-input--num" style={{ width: 100 }} inputMode="decimal" value={l.qty} onChange={(e) => update(i, { qty: e.target.value.trim() })}
-                    aria-label="Quantity" aria-invalid={!!fieldError(errors, `lines.${i}.qtyDelta`)} />
+                  <QtyStepper value={l.qty} onChange={(v) => update(i, { qty: v })} label={`Quantity of ${l.item.sku}`} invalid={!!fieldError(errors, `lines.${i}.qtyDelta`)} />
                   {fieldError(errors, `lines.${i}.qtyDelta`) && <div className="ui-error">{fieldError(errors, `lines.${i}.qtyDelta`)}</div>}
                 </td>
                 {reason === 'opening' && meta.can.seeCost && (

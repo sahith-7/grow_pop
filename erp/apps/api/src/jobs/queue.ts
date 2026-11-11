@@ -1,9 +1,9 @@
 import type { Tx } from '../db.js';
 
-export type JobKind = 'import' | 'woo.product' | 'woo.stock' | 'woo.inbound' | 'woo.reconcile' | 'woo.match' | 'woo.fulfilment' | 'export';
+export type JobKind = 'import' | 'woo.product' | 'woo.stock' | 'woo.inbound' | 'woo.reconcile' | 'woo.match' | 'woo.fulfilment' | 'export' | 'mail.register';
 
 /** Lower runs first. Incoming orders go before stock pushes, so Woo is never told stock an unprocessed order already took. */
-const PRIORITY: Record<JobKind, number> = { 'woo.inbound': 1, import: 5, 'woo.stock': 3, 'woo.product': 5, 'woo.reconcile': 7, 'woo.match': 5, 'woo.fulfilment': 2, export: 8 };
+const PRIORITY: Record<JobKind, number> = { 'woo.inbound': 1, import: 5, 'woo.stock': 3, 'woo.product': 5, 'woo.reconcile': 7, 'woo.match': 5, 'woo.fulfilment': 2, export: 8, 'mail.register': 6 };
 
 /** Queue a background job inside the caller's transaction. A pending job for the same resource is reused (D21). */
 export async function enqueue(tx: Tx, kind: JobKind, resourceId: string, opts: { maxAttempts?: number; delaySec?: number } = {}) {

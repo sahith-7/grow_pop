@@ -65,9 +65,9 @@ Nightly: server ─ pg_dump as erp_dump ─> backup account S3 (Object Lock)
    backup retention 14 days** (staging 7), Performance Insights on (free tier), auto minor upgrade on.
 2. Parameter group `erp-pg16` (family postgres16): `rds.force_ssl = 1`, `log_min_duration_statement = 1000`. Attach it,
    reboot once.
-3. Create the roles. From Session Manager on the server:
+3. Create the roles. From Session Manager on the server (it signs you in as `ssm-user`, who is not in the docker group, hence `sudo`):
    ```sh
-   docker run --rm -it -v /opt/erp/certs:/certs:ro postgres:16 psql \
+   sudo docker run --rm -it -v /opt/erp/certs:/certs:ro postgres:16 psql \
      "postgres://erp_owner@<endpoint>:5432/erp?sslmode=verify-full&sslrootcert=/certs/rds-ca.pem"
    ```
    ```sql

@@ -6,6 +6,8 @@ export interface Me {
   tenant: { id: string; name: string };
   permissions: string[];
   totp: { enabled: boolean; setupRequired: boolean };
+  /** v2 (D115): the outlets this person may look at (main first), whether that is all of them, and the one in view. */
+  outlets: { items: { id: string; name: string; isMain: boolean; active: boolean }[]; all: boolean; current: string | null };
 }
 
 const MeContext = createContext<Me | null>(null);

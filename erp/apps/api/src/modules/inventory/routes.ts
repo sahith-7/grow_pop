@@ -1,3 +1,4 @@
+import { outletScope } from '../outlets/scope.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { tenantTx } from '../../db.js';
@@ -51,18 +52,18 @@ export async function inventoryRoutes(app: FastifyInstance) {
   app.get('/stock/balances', read, async (req) => {
     const q = s.balancesQuery.parse(req.query);
     const after = decodeCursor(q.cursor, z.tuple([z.string(), z.string(), z.string().uuid()]));
-    const page = await tx(req, (t) => svc.listBalances(t, { ...q, lowStock: q.lowStock === 'true', after }, can(req, 'cost.view')));
+    const page = await tx(req, async (t) => svc.listBalances(t, { ...q, lowStock: q.lowStock === 'true', after, scope: await outletScope(t, req) }, can(req, 'cost.view')));
     return { items: page.items, nextCursor: page.last ? encodeCursor(page.last) : null };
   });
 
   app.get('/stock/movements', read, async (req) => {
     const q = s.movementsQuery.parse(req.query);
     const after = decodeCursor(q.cursor, z.tuple([z.number().int()]));
-    const page = await tx(req, (t) => listMovements(t, { ...q, afterSeq: after?.[0] ?? null }, can(req, 'cost.view')));
+    const page = await tx(req, async (t) => listMovements(t, { ...q, afterSeq: after?.[0] ?? null, scope: await outletScope(t, req) }, can(req, 'cost.view')));
     return { items: page.items, nextCursor: page.last ? encodeCursor([page.last]) : null };
   });
 
-  app.get('/stock/reconciliation', { preHandler: requires('stock.adjust') }, async (req) => ({ mismatches: await tx(req, svc.reconciliation) }));
+  app.get('/stock/reconciliation', { preHandler: requires('stock.adjust') }, async (req) => ({ mismatches: await tx(req, async (t) => svc.reconciliation(t, await outletScope(t, req))) }));
 
   // ---------------------------------------------------------------- postings
   app.post('/stock/adjustments', { preHandler: requiresAny('stock.adjust', 'stock.writeoff') }, async (req, reply) => {
@@ -105,7 +106,7 @@ export async function inventoryRoutes(app: FastifyInstance) {
   app.get('/stocktakes', count, async (req) => {
     const q = s.stocktakeListQuery.parse(req.query);
     const after = decodeCursor(q.cursor, z.tuple([z.string(), z.string().uuid()]));
-    const page = await tx(req, (t) => st.listStocktakes(t, { ...q, after }));
+    const page = await tx(req, async (t) => st.listStocktakes(t, { ...q, after, scope: await outletScope(t, req) }));
     return { items: page.items, nextCursor: page.last ? encodeCursor(page.last) : null };
   });
   app.post('/stocktakes', count, async (req, reply) => {

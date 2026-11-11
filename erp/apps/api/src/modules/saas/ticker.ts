@@ -1,3 +1,4 @@
+import { ALL_OUTLETS } from '../outlets/scope.js';
 import type { FastifyBaseLogger } from 'fastify';
 import { config } from '../../config.js';
 import { pool, tenantTx, type Tx } from '../../db.js';
@@ -96,7 +97,7 @@ async function lowStockDigest(tx: Tx, s: Record<string, any>, now: Date, log: Fa
   const def = REPORTS['low-stock'];
   const params: unknown[] = [];
   const p = (v: unknown) => { params.push(v); return `$${params.length}`; };
-  const { rows } = await tx.query(`SELECT * FROM (${def.sql({ from: '', to: '', tz: s.timezone, locationId: null }, p)}) r ORDER BY ${def.order}`, params);
+  const { rows } = await tx.query(`SELECT * FROM (${def.sql({ from: '', to: '', tz: s.timezone, locationId: null, scope: ALL_OUTLETS }, p)}) r ORDER BY ${def.order}`, params);
   if (!rows.length) return;
   const lines = rows.slice(0, MAX_LINES).map((r) => `- ${r.product} (${r.sku}): ${Number(r.available)} left, reorder at ${Number(r.reorder_level)}`
     + (Number(r.on_order) > 0 ? `, ${Number(r.on_order)} on order` : ''));

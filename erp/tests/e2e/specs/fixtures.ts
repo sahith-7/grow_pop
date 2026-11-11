@@ -20,7 +20,11 @@ export async function newStore(page: Page) {
   const b = await req.patch('/api/v1/billing/settings', { headers, data: { gstScheme: 'unregistered', stateCode: '27' } });
   expect(b.status(), await b.text()).toBe(200);
   const sku = `E2E-${run}`;
-  const p = await req.post('/api/v1/products', { headers, data: { name: `Cotton kurta ${run}`, type: 'simple', status: 'active', unitCode: 'NOS', variants: [{ sku, price: '499' }] } });
+  // v2 (D88): every new product needs a category.
+  const cat = await req.post('/api/v1/categories', { headers, data: { name: 'General' } });
+  expect(cat.status(), await cat.text()).toBe(201);
+  const categoryId = (await cat.json()).id as string;
+  const p = await req.post('/api/v1/products', { headers, data: { name: `Cotton kurta ${run}`, categoryId, type: 'simple', status: 'active', unitCode: 'NOS', variants: [{ sku, price: '499' }] } });
   expect(p.status(), await p.text()).toBe(201);
   const variantId = (await p.json()).variants[0].id;
   const locs = (await (await req.get('/api/v1/locations')).json()).items as { id: string; type: string }[];

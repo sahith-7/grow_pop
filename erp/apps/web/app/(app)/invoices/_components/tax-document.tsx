@@ -1,13 +1,19 @@
 'use client';
 
-import { money } from '../../../../lib/format';
-import { PAY_METHOD, type DocLine, type Party, type TaxDocument } from '../../../../lib/sales-api';
+import { money, qtyTotal } from '../../../../lib/format';
+import { BILL_FORMATS, PAY_METHOD, type BillFormat, type DocLine, type Party, type TaxDocument } from '../../../../lib/sales-api';
+import { fmtDay, fmtTime } from '@/lib/datetime';
 
-// One invoice, bill of supply or credit note, laid out for A4 or an 80 mm receipt printer. Everything printed comes from the
+// One invoice, bill of supply or credit note, laid out for A4, A5, or a 57 mm or 80 mm receipt printer (v2, D99). Everything printed comes from the
 // document's own snapshot (seller, buyer, lines, tax), never from today's settings, so a reprint is always identical.
 // Printing uses the browser: only the [data-print-root] block is printed; the page sets @page size for the chosen paper.
 
-export type Paper = 'a4' | 'receipt';
+export type Paper = BillFormat;
+const ROLL: Partial<Record<Paper, { page: number; print: number; font: number }>> = {
+  // Printable width is narrower than the paper: about 48 mm on 57/58 mm rolls and 72 mm on 80 mm rolls.
+  '57mm': { page: 57, print: 48, font: 10 },
+  '80mm': { page: 80, print: 72, font: 11 },
+};
 
 const n2 = (v: string | undefined | null) => (v === undefined || v === null ? '' : Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const signed = (v: string) => (v.startsWith('-') ? `−${n2(v.slice(1))}` : n2(v));
@@ -31,7 +37,8 @@ function byRate(lines: DocLine[]) {
 
 export const PRINT_CSS = (paper: Paper) => `
 @media print {
-  @page { size: ${paper === 'receipt' ? '80mm auto' : 'A4'}; margin: ${paper === 'receipt' ? '3mm' : '12mm'}; }
+  @page { size: ${ROLL[paper] ? `${ROLL[paper]!.page}mm auto` : paper === 'a5' ? 'A5' : 'A4'}; margin: ${ROLL[paper] ? '0' : paper === 'a5' ? '7mm' : '12mm'}; }
+  .td-receipt { margin: 0 auto !important; }
   body * { visibility: hidden !important; }
   [data-print-root], [data-print-root] * { visibility: visible !important; }
   [data-print-root] { position: absolute; inset: 0 auto auto 0; width: 100%; box-shadow: none !important; border: 0 !important; margin: 0 !important; }
@@ -48,23 +55,29 @@ export const PRINT_CSS = (paper: Paper) => `
 .td-doc .totals { margin-left: auto; width: min(320px, 100%); }
 .td-doc .totals td { border: 0; padding: 2px 6px; }
 .td-doc .grand td { font-size: 15px; font-weight: 700; border-top: 1px solid #111; }
-.td-receipt { width: 72mm; max-width: 100%; padding: 8px; font-size: 11px; font-family: var(--font-mono, ui-monospace, monospace); }
+.td-receipt { width: ${ROLL[paper]?.print ?? 72}mm; max-width: 100%; padding: 2mm 0; font-size: ${ROLL[paper]?.font ?? 11}px; font-family: var(--font-mono, ui-monospace, monospace); }
+@media screen { .td-receipt { padding: 8px; box-sizing: content-box; } }
+.td-a5 { font-size: 10px; padding: 14px; }
+.td-a5 th, .td-a5 td { padding: 2px 4px; }
+.td-a5 th { font-size: 9px; }
+.td-a5 .title { font-size: 13px; }
+.td-a5 .grand td { font-size: 12px; }
 .td-receipt .c { text-align: center; }
 .td-receipt table td, .td-receipt table th { border: 0; padding: 1px 0; background: none; }
 .td-receipt hr { border: 0; border-top: 1px dashed #333; margin: 6px 0; }
 `;
 
 export function TaxDocumentView({ doc, paper }: { doc: TaxDocument; paper: Paper }) {
-  return paper === 'receipt' ? <Receipt doc={doc} /> : <A4 doc={doc} />;
+  return ROLL[paper] ? <Receipt doc={doc} /> : <A4 doc={doc} small={paper === 'a5'} />;
 }
 
-function A4({ doc }: { doc: TaxDocument }) {
+function A4({ doc, small }: { doc: TaxDocument; small?: boolean }) {
   const regular = doc.gstScheme === 'regular';
   const inter = doc.supplyType === 'inter';
   const s = doc.seller, b = doc.buyer;
   const label = doc.stateTaxLabel;
   return (
-    <div className="td-doc" data-print-root>
+    <div className={`td-doc${small ? ' td-a5' : ''}`} data-print-root>
       <div className="head">
         <div>
           <div style={{ fontSize: 16, fontWeight: 700 }}>{s.legalName || s.name}</div>
@@ -119,6 +132,11 @@ function A4({ doc }: { doc: TaxDocument }) {
             <td className="r">{n2(l.lineTotal)}</td>
           </tr>
         ))}</tbody>
+        <tfoot><tr className="td-qty-total">
+          <td /><td colSpan={2}><strong>Total quantity</strong> <span className="muted">({goodsCount(doc.lines)} item{goodsCount(doc.lines) === 1 ? '' : 's'})</span></td>
+          <td className="r"><strong>{goodsQty(doc.lines)}</strong></td>
+          <td colSpan={(doc.type === 'invoice' ? 2 : 0) + 2 + (regular ? (inter ? 2 : 3) : 0)} />
+        </tr></tfoot>
       </table>
 
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12, alignItems: 'flex-start' }}>
@@ -168,7 +186,7 @@ function Receipt({ doc }: { doc: TaxDocument }) {
       <div className="c"><strong>{doc.title.toUpperCase()}</strong></div>
       {doc.gstScheme === 'composition' && <div className="c">Composition taxable person, not eligible to collect tax on supplies</div>}
       <div>No. {doc.number}</div>
-      <div>Date {fmtDate(doc.issuedDate)} {new Date(doc.issuedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+      <div>Date {fmtDate(doc.issuedDate)} {fmtTime(doc.issuedAt)}</div>
       {doc.originalInvoice && <div>Against {doc.originalInvoice.number}</div>}
       {b.name && <div>To: {b.name}{b.gstin ? ` · GSTIN ${b.gstin}` : ''}</div>}
       {doc.placeOfSupply && regular && <div>Place of supply: {doc.placeOfSupply.name} ({doc.placeOfSupply.code})</div>}
@@ -184,6 +202,7 @@ function Receipt({ doc }: { doc: TaxDocument }) {
         </td></tr>
       ))}</tbody></table>
       <hr />
+      <Row k={`Total qty (${goodsCount(doc.lines)} item${goodsCount(doc.lines) === 1 ? '' : 's'})`} v={goodsQty(doc.lines)} />
       <Row k="Taxable value" v={n2(doc.taxableTotal)} />
       {regular && doc.supplyType !== 'inter' && <><Row k="CGST" v={n2(doc.cgst)} /><Row k={doc.stateTaxLabel} v={n2(doc.sgst)} /></>}
       {regular && doc.supplyType === 'inter' && <Row k="IGST" v={n2(doc.igst)} />}
@@ -199,11 +218,21 @@ function Receipt({ doc }: { doc: TaxDocument }) {
   );
 }
 
+/** Goods only (not delivery charges), added up per unit code as printed on the lines: "7 NOS, 2.5 KGS". */
+const goodsQty = (lines: DocLine[]) => qtyTotal(lines.filter((l) => l.kind !== 'shipping').map((l) => ({ qty: l.qty, unit: l.uqc })), (u) => u);
+const goodsCount = (lines: DocLine[]) => lines.filter((l) => l.kind !== 'shipping').length;
+
 function Row({ k, v }: { k: string; v: string }) {
   return <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{k}</span><span>{v}</span></div>;
 }
 
-export function fmtDate(d: string) {
-  const [y, m, day] = d.split('-').map(Number);
-  return new Date(y, m - 1, day).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+export const fmtDate = (d: string) => fmtDay(d);
+
+/** Choose the paper, then print. Opens on the store's bill format (Billing & GST). */
+export function PaperPicker({ paper, onChange }: { paper: Paper; onChange: (p: Paper) => void }) {
+  return (
+    <div className="ui-segmented" role="group" aria-label="Paper">
+      {BILL_FORMATS.map((f) => <button key={f.value} type="button" aria-pressed={paper === f.value} title={f.help} onClick={() => onChange(f.value)}>{f.label}</button>)}
+    </div>
+  );
 }

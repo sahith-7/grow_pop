@@ -2,7 +2,7 @@ import type { Tx } from '../../db.js';
 import { milli } from '../../lib/quantity.js';
 import { lineTax, paise, rateBp, rupees, STATES, stateFromAddress } from '../../lib/gst.js';
 import { issueInvoice, type PricedLine } from '../billing/documents.js';
-import { loadProfile } from '../billing/profile.js';
+import { loadProfile, outletOfLocation } from '../billing/profile.js';
 
 // GST invoice for a web order, issued when the goods leave (CGST s.31: at or before removal of goods). In B4/B5 that is
 // the moment WooCommerce marks the order completed; from B6 it is dispatch.
@@ -33,7 +33,8 @@ export async function invoiceWebOrder(tx: Tx, orderId: string, actorId: string |
   if (!o) return { state: 'pending', note: 'Order not found' };
   if (o.invoice_id) { const { rows: [i] } = await tx.query('SELECT number FROM invoices WHERE id = $1', [o.invoice_id]); return { state: 'issued', invoiceId: o.invoice_id, number: i.number }; }
 
-  const p = await loadProfile(tx);
+  // The outlet whose stock room ships web orders issues their invoices (v2, D101).
+  const p = await loadProfile(tx, await outletOfLocation(tx, o.location_id));
   const pending = async (note: string) => { await mark(tx, orderId, 'pending', note, actorId, `Invoice not issued: ${note}`); return { state: 'pending' as const, note }; };
   if (!p.settings.invoiceWebOrders) {
     const note = 'Web-order invoices are made in WooCommerce (Billing & GST setting)';

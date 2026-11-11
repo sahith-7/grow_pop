@@ -10,6 +10,7 @@ export default function LocationsPage() {
   const [meta, setMeta] = useState<StockMeta | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<Location['type']>('back_room');
+  const [outletId, setOutletId] = useState('');
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -28,22 +29,26 @@ export default function LocationsPage() {
   };
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (await call(() => api('/locations', { method: 'POST', body: { name: name.trim(), type } }))) setName('');
+    if (await call(() => api('/locations', { method: 'POST', body: { name: name.trim(), type, ...(outletId ? { outletId } : {}) } }))) setName('');
   };
   const patch = (id: string, body: Partial<Pick<Location, 'name' | 'isSellable' | 'active'>>) => call(() => api(`/locations/${id}`, { method: 'PATCH', body }));
+
+  // With more than one outlet (v2, D101), each stock room shows which outlet it belongs to.
+  const outlets = [...new Map((meta?.locations ?? []).filter((l) => l.outletId).map((l) => [l.outletId!, l.outletName ?? ''])).entries()];
+  const many = outlets.length > 1;
 
   if (meta && !meta.can.manageLocations) return <div className="ui-content"><div className="ui-alert ui-alert--warning"><div className="ui-alert-body">Only the owner can change locations.</div></div></div>;
 
   return (
     <div className="ui-content">
       <div className="ui-page-header"><div><Link className="ui-caption" href="/stock">Stock /</Link><h1 className="ui-h1">Locations</h1></div></div>
-      <p className="ui-muted">Places inside your shop where stock sits. Only stock at sellable locations counts as available to sell.</p>
+      <p className="ui-muted">Places where stock sits, such as the shop floor and a godown. Only stock at sellable locations counts as available to sell.{many ? ' Each outlet has its own; open and manage outlets on the Account page.' : ''}</p>
       {error && <div className="ui-alert ui-alert--danger" role="alert"><div className="ui-alert-body">{error}</div></div>}
 
       <div className="ui-panel">
         {!meta ? <div className="ui-panel-body"><div className="ui-skeleton" style={{ height: 120 }} /></div> : (
           <div className="ui-table-wrap"><table className="ui-table">
-            <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Sellable</th><th scope="col">Status</th><th scope="col"><span className="ui-sr-only">Actions</span></th></tr></thead>
+            <thead><tr><th scope="col">Name</th>{many && <th scope="col">Outlet</th>}<th scope="col">Type</th><th scope="col">Sellable</th><th scope="col">Status</th><th scope="col"><span className="ui-sr-only">Actions</span></th></tr></thead>
             <tbody>{meta.locations.map((l) => (
               <tr key={l.id}>
                 <td>
@@ -55,6 +60,7 @@ export default function LocationsPage() {
                     </form>
                   ) : <span className="ui-cell-title">{l.name}</span>}
                 </td>
+                {many && <td>{l.outletName}</td>}
                 <td className="ui-cell-sub">{TYPE_LABEL[l.type]}</td>
                 <td>
                   {l.type === 'quarantine' ? <span className="ui-muted">Never</span> : (
@@ -79,6 +85,10 @@ export default function LocationsPage() {
             <input className="ui-input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="e.g. Godown" aria-invalid={!!fieldError(errors, 'name')} />
             {fieldError(errors, 'name') && <span className="ui-error">{fieldError(errors, 'name')}</span>}
           </label>
+          {many && <label className="ui-field"><span className="ui-label">Outlet</span>
+            <select className="ui-select" value={outletId || outlets[0][0]} onChange={(e) => setOutletId(e.target.value)}>
+              {outlets.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
+            </select></label>}
           <label className="ui-field"><span className="ui-label">Type</span>
             <select className="ui-select" value={type} onChange={(e) => setType(e.target.value as Location['type'])}>
               {Object.entries(TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}

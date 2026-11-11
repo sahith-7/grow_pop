@@ -1,6 +1,6 @@
 # Copy to /etc/systemd/system/ with erp-backup.timer, then: systemctl daemon-reload && systemctl enable --now erp-backup.timer
 [Unit]
-Description=TRIDENT nightly database backup to the backup account
+Description=GroPop nightly database backup to the backup account
 After=docker.service network-online.target
 Wants=network-online.target
 

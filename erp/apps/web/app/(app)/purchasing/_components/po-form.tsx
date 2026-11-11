@@ -7,14 +7,15 @@ import { money } from '../../../../lib/format';
 import { ApiError, api, errorText, fieldError, idemKey, noEnterSubmit, lineTotal, type Picked, type PurchaseOrder, sumMoney } from '../../../../lib/stock-api';
 import { ItemCell, ItemPicker } from '../../stock/_components/item-picker';
 import { useSuppliers } from './use-suppliers';
+import { QtyStepper } from '../../../../lib/qty';
 
 interface Line { item: Picked; orderedQty: string; unitCost: string }
 
 /** Create a purchase order, or edit one that is still a draft. Prices are per unit, before GST. */
-export function PoForm({ po, etag, onSaved }: { po?: PurchaseOrder; etag?: string | null; onSaved?: (po: PurchaseOrder, etag: string | null) => void }) {
+export function PoForm({ po, etag, onSaved, initialSupplierId }: { po?: PurchaseOrder; etag?: string | null; onSaved?: (po: PurchaseOrder, etag: string | null) => void; initialSupplierId?: string }) {
   const router = useRouter();
   const { suppliers, error: supplierError } = useSuppliers();
-  const [supplierId, setSupplierId] = useState(po?.supplier.id ?? '');
+  const [supplierId, setSupplierId] = useState(po?.supplier.id ?? initialSupplierId ?? '');
   const [expectedDate, setExpectedDate] = useState(po?.expectedDate ?? '');
   const [notes, setNotes] = useState(po?.notes ?? '');
   const [lines, setLines] = useState<Line[]>(po?.lines.map((l) => ({ item: l, orderedQty: l.orderedQty, unitCost: l.unitCost ?? '' })) ?? []);
@@ -65,7 +66,7 @@ export function PoForm({ po, etag, onSaved }: { po?: PurchaseOrder; etag?: strin
             {suppliers?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           {(fieldError(errors, 'supplierId') || supplierError) && <span className="ui-error">{fieldError(errors, 'supplierId') ?? supplierError}</span>}
-          {suppliers?.length === 0 && <span className="ui-help">No suppliers yet. <Link href="/suppliers">Add one</Link> first.</span>}
+          {suppliers?.length === 0 && <span className="ui-help">No suppliers yet. <Link href="/contacts?type=supplier">Add one</Link> first.</span>}
         </label>
         <label className="ui-field"><span className="ui-label">Expected on</span>
           <input className="ui-input" type="date" value={expectedDate} onChange={(e) => { setExpectedDate(e.target.value); setSaved(false); }} />
@@ -85,7 +86,7 @@ export function PoForm({ po, etag, onSaved }: { po?: PurchaseOrder; etag?: strin
               <tr key={l.item.variantId}>
                 <td><ItemCell item={l.item} />{fieldError(errors, `lines.${i}.variantId`) && <div className="ui-error">{fieldError(errors, `lines.${i}.variantId`)}</div>}</td>
                 <td className="ui-num">
-                  <input className="ui-input ui-input--num" style={{ width: 90 }} inputMode="decimal" value={l.orderedQty} aria-label="Quantity" aria-invalid={!!fieldError(errors, `lines.${i}.orderedQty`)} onChange={(e) => set(i, { orderedQty: e.target.value })} />
+                  <QtyStepper value={l.orderedQty} onChange={(v) => set(i, { orderedQty: v })} label={`Quantity of ${l.item.sku}`} invalid={!!fieldError(errors, `lines.${i}.orderedQty`)} />
                   {fieldError(errors, `lines.${i}.orderedQty`) && <div className="ui-error">{fieldError(errors, `lines.${i}.orderedQty`)}</div>}
                 </td>
                 <td className="ui-money">
